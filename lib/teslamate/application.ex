@@ -13,7 +13,13 @@ defmodule TeslaMate.Application do
 
     TeslaMate.DatabaseCheck.check_postgres_version()
 
-    Supervisor.start_link(children(), strategy: :one_for_one, name: TeslaMate.Supervisor)
+    # Start supervisor
+    result = Supervisor.start_link(children(), strategy: :one_for_one, name: TeslaMate.Supervisor)
+    
+    # Send startup notification email
+    Task.start(fn -> TeslaMate.Email.send_startup_notification() end)
+    
+    result
   end
 
   defp children do

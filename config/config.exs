@@ -16,6 +16,18 @@ config :teslamate,
     TeslaMate.Auth.Tokens
   ]
 
+# Swoosh email configuration
+config :teslamate, TeslaMate.Email.Mailer,
+  adapter: Swoosh.Adapters.SMTP,
+  relay: System.get_env("SMTP_RELAY", "smtp.qq.com"),
+  port: String.to_integer(System.get_env("SMTP_PORT", "587")),
+  username: System.get_env("SMTP_USERNAME"),
+  password: System.get_env("SMTP_PASSWORD"),
+  tls: :always,
+  auth: :always,
+  retries: 2,
+  no_mx_lookups: false
+
 config :logger, :console,
   format: "$time $metadata[$level] $message\n",
   metadata: [:car_id]

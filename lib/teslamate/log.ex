@@ -355,9 +355,15 @@ defmodule TeslaMate.Log do
           |> put_geofence(:start_geofence_id, start_pos)
           |> put_geofence(:end_geofence_id, end_pos)
 
-        drive
-        |> Drive.changeset(attrs)
-        |> Repo.update()
+        case drive
+             |> Drive.changeset(attrs)
+             |> Repo.update() do
+          {:ok, updated_drive} ->
+            # Send drive record email notification
+            Task.start(fn -> TeslaMate.Email.send_drive_notification(updated_drive) end)
+            {:ok, updated_drive}
+          error -> error
+        end
 
       _ ->
         drive
