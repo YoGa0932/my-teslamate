@@ -35,8 +35,20 @@ defmodule TeslaMate.Email do
         # Get SMTP configuration at runtime
         smtp_config = get_smtp_config()
         
+        # Convert map to keyword list for Swoosh
+        smtp_config_keywords = [
+          relay: smtp_config.relay,
+          port: smtp_config.port,
+          username: smtp_config.username,
+          password: smtp_config.password,
+          tls: smtp_config.tls,
+          auth: smtp_config.auth,
+          retries: smtp_config.retries,
+          no_mx_lookups: smtp_config.no_mx_lookups
+        ]
+        
         # Use Swoosh directly with runtime configuration
-        case Swoosh.Adapters.SMTP.deliver(email, smtp_config) do
+        case Swoosh.Adapters.SMTP.deliver(email, smtp_config_keywords) do
           {:ok, _response} ->
             Logger.info("Drive record email sent successfully", car_id: drive.car.id, drive_id: drive.id)
             {:ok, "Email sent successfully"}
@@ -259,8 +271,20 @@ defmodule TeslaMate.Email do
         # Get SMTP configuration at runtime
         smtp_config = get_smtp_config()
         
+        # Convert map to keyword list for Swoosh
+        smtp_config_keywords = [
+          relay: smtp_config.relay,
+          port: smtp_config.port,
+          username: smtp_config.username,
+          password: smtp_config.password,
+          tls: smtp_config.tls,
+          auth: smtp_config.auth,
+          retries: smtp_config.retries,
+          no_mx_lookups: smtp_config.no_mx_lookups
+        ]
+        
         # Use Swoosh directly with runtime configuration
-        case Swoosh.Adapters.SMTP.deliver(email, smtp_config) do
+        case Swoosh.Adapters.SMTP.deliver(email, smtp_config_keywords) do
           {:ok, _response} ->
             Logger.info("Startup notification email sent successfully")
             {:ok, "Startup notification email sent successfully"}
