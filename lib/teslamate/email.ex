@@ -283,23 +283,25 @@ defmodule TeslaMate.Email do
   end
 
   defp get_memory_info() do
-    case System.cmd("vm_stat", []) do
+    case System.cmd("free", ["-h"]) do
       {output, 0} -> 
-        # macOS memory information
         lines = String.split(output, "\n")
         case lines do
-          [_header, _memory_line | _] ->
-            # Simplified processing, return basic information
+          [_header, memory_line | _] ->
+            # Parse memory line (e.g., "Mem:    7.7Gi  2.1Gi  5.6Gi")
+            parts = String.split(memory_line, ~r/\s+/, trim: true)
+            case parts do
+              ["Mem:", total, used, free | _] ->
+                %{total: total, used: used, free: free}
+              _ ->
+                %{total: "System Memory", used: "Running", free: "Available"}
+            end
+          _ -> 
             %{total: "System Memory", used: "Running", free: "Available"}
-          _ -> %{total: "Unknown", used: "Unknown", free: "Unknown"}
         end
       _ -> 
-        # If vm_stat is not available, try other methods
-        case System.cmd("top", ["-l", "1"]) do
-          {_output, 0} ->
-            %{total: "System Memory", used: "Running", free: "Available"}
-          _ -> %{total: "Unknown", used: "Unknown", free: "Unknown"}
-        end
+        # Fallback to basic info if free command fails
+        %{total: "System Memory", used: "Running", free: "Available"}
     end
   end
 
