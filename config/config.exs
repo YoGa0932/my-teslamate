@@ -16,13 +16,11 @@ config :teslamate,
     TeslaMate.Auth.Tokens
   ]
 
-# Swoosh email configuration
+# Swoosh email configuration - will be configured at runtime
 config :teslamate, TeslaMate.Email.Mailer,
   adapter: Swoosh.Adapters.SMTP,
   relay: "smtp.qq.com",
   port: 587,
-  username: nil,
-  password: nil,
   tls: :always,
   auth: :always,
   retries: 2,

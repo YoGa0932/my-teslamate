@@ -35,7 +35,8 @@ defmodule TeslaMate.Email do
         # Get SMTP configuration at runtime
         smtp_config = get_smtp_config()
         
-        case TeslaMate.Email.Mailer.deliver(email, smtp_config) do
+        # Use Swoosh directly with runtime configuration
+        case Swoosh.Adapters.SMTP.deliver(email, smtp_config) do
           {:ok, _response} ->
             Logger.info("Drive record email sent successfully", car_id: drive.car.id, drive_id: drive.id)
             {:ok, "Email sent successfully"}
@@ -244,14 +245,6 @@ defmodule TeslaMate.Email do
       email_address ->
         Logger.info("Attempting to send startup notification email to: #{email_address}")
         
-        # Debug: Check SMTP configuration
-        smtp_username = System.get_env("SMTP_USERNAME")
-        smtp_password = System.get_env("SMTP_PASSWORD")
-        smtp_relay = System.get_env("SMTP_RELAY")
-        smtp_port = System.get_env("SMTP_PORT")
-        
-        Logger.info("SMTP Configuration - Username: #{smtp_username}, Relay: #{smtp_relay}, Port: #{smtp_port}")
-        
         # Get system information
         system_info = get_system_info()
         
@@ -266,7 +259,8 @@ defmodule TeslaMate.Email do
         # Get SMTP configuration at runtime
         smtp_config = get_smtp_config()
         
-        case TeslaMate.Email.Mailer.deliver(email, smtp_config) do
+        # Use Swoosh directly with runtime configuration
+        case Swoosh.Adapters.SMTP.deliver(email, smtp_config) do
           {:ok, _response} ->
             Logger.info("Startup notification email sent successfully")
             {:ok, "Startup notification email sent successfully"}
