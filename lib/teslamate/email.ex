@@ -13,14 +13,15 @@ defmodule TeslaMate.Email do
     # Check if email address is configured
     case System.get_env("DRIVE_NOTIFICATION_EMAIL") do
       nil ->
-        Logger.debug("Email address not configured, skipping email send", car_id: drive.car_id, drive_id: drive.id)
+        Logger.info("Email address not configured, skipping drive notification email send", car_id: drive.car_id, drive_id: drive.id)
         {:ok, "Email address not configured"}
 
       email_address when email_address == "your-email@example.com" ->
-        Logger.debug("Using default email address, skipping email send", car_id: drive.car_id, drive_id: drive.id)
+        Logger.info("Using default email address, skipping drive notification email send", car_id: drive.car_id, drive_id: drive.id)
         {:ok, "Using default email address"}
 
       email_address ->
+        Logger.info("Attempting to send drive notification email to: #{email_address}", car_id: drive.car_id, drive_id: drive.id)
         drive = TeslaMate.Repo.preload(drive, [:car, :start_address, :end_address, :start_geofence, :end_geofence])
 
         email = %Swoosh.Email{
@@ -230,14 +231,15 @@ defmodule TeslaMate.Email do
     # Check if email address is configured
     case System.get_env("DRIVE_NOTIFICATION_EMAIL") do
       nil ->
-        Logger.debug("Email address not configured, skipping startup notification email send")
+        Logger.info("Email address not configured, skipping startup notification email send")
         {:ok, "Email address not configured"}
 
       email_address when email_address == "your-email@example.com" ->
-        Logger.debug("Using default email address, skipping startup notification email send")
+        Logger.info("Using default email address, skipping startup notification email send")
         {:ok, "Using default email address"}
 
       email_address ->
+        Logger.info("Attempting to send startup notification email to: #{email_address}")
         # Get system information
         system_info = get_system_info()
         
