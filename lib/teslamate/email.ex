@@ -32,7 +32,10 @@ defmodule TeslaMate.Email do
           text_body: generate_drive_email_text(drive)
         }
 
-        case TeslaMate.Email.Mailer.deliver(email) do
+        # Get SMTP configuration at runtime
+        smtp_config = get_smtp_config()
+        
+        case TeslaMate.Email.Mailer.deliver(email, smtp_config) do
           {:ok, _response} ->
             Logger.info("Drive record email sent successfully", car_id: drive.car.id, drive_id: drive.id)
             {:ok, "Email sent successfully"}
@@ -240,6 +243,15 @@ defmodule TeslaMate.Email do
 
       email_address ->
         Logger.info("Attempting to send startup notification email to: #{email_address}")
+        
+        # Debug: Check SMTP configuration
+        smtp_username = System.get_env("SMTP_USERNAME")
+        smtp_password = System.get_env("SMTP_PASSWORD")
+        smtp_relay = System.get_env("SMTP_RELAY")
+        smtp_port = System.get_env("SMTP_PORT")
+        
+        Logger.info("SMTP Configuration - Username: #{smtp_username}, Relay: #{smtp_relay}, Port: #{smtp_port}")
+        
         # Get system information
         system_info = get_system_info()
         
@@ -251,7 +263,10 @@ defmodule TeslaMate.Email do
           text_body: generate_startup_email_text(system_info)
         }
 
-        case TeslaMate.Email.Mailer.deliver(email) do
+        # Get SMTP configuration at runtime
+        smtp_config = get_smtp_config()
+        
+        case TeslaMate.Email.Mailer.deliver(email, smtp_config) do
           {:ok, _response} ->
             Logger.info("Startup notification email sent successfully")
             {:ok, "Startup notification email sent successfully"}
@@ -280,6 +295,53 @@ defmodule TeslaMate.Email do
       {output, 0} -> String.trim(output)
       _ -> "Unable to get"
     end
+  end
+
+  defp get_smtp_config() do
+    username = case System.get_env("SMTP_USERNAME") do
+      nil ->
+        Logger.error("SMTP_USERNAME environment variable is not set.")
+        raise "SMTP_USERNAME environment variable is not set. Please set SMTP_USERNAME in your environment or systemd service file."
+      username when is_binary(username) and byte_size(username) > 0 ->
+        Logger.debug("Successfully got SMTP username", username_length: byte_size(username))
+        username
+      _ ->
+        Logger.error("SMTP_USERNAME environment variable is empty")
+        raise "SMTP_USERNAME environment variable is empty. Please set a valid SMTP_USERNAME."
+    end
+
+    password = case System.get_env("SMTP_PASSWORD") do
+      nil ->
+        Logger.error("SMTP_PASSWORD environment variable is not set.")
+        raise "SMTP_PASSWORD environment variable is not set. Please set SMTP_PASSWORD in your environment or systemd service file."
+      password when is_binary(password) and byte_size(password) > 0 ->
+        Logger.debug("Successfully got SMTP password", password_length: byte_size(password))
+        password
+      _ ->
+        Logger.error("SMTP_PASSWORD environment variable is empty")
+        raise "SMTP_PASSWORD environment variable is empty. Please set a valid SMTP_PASSWORD."
+    end
+
+    relay = System.get_env("SMTP_RELAY", "smtp.qq.com")
+    port = case System.get_env("SMTP_PORT", "587") do
+      port_str when is_binary(port_str) ->
+        case Integer.parse(port_str) do
+          {port_int, _} -> port_int
+          :error -> 587
+        end
+      _ -> 587
+    end
+
+    %{
+      relay: relay,
+      port: port,
+      username: username,
+      password: password,
+      tls: :always,
+      auth: :always,
+      retries: 2,
+      no_mx_lookups: false
+    }
   end
 
   defp get_memory_info() do
