@@ -25,7 +25,7 @@ defmodule TeslaMate.Email do
         drive = TeslaMate.Repo.preload(drive, [:car, :start_address, :end_address, :start_geofence, :end_geofence])
 
         email = %Swoosh.Email{
-          from: {System.get_env("EMAIL_FROM_NAME", "TeslaMate"), System.get_env("EMAIL_FROM_ADDRESS", "teslamate@example.com")},
+          from: {System.get_env("EMAIL_FROM_NAME", "TeslaMate"), System.get_env("SMTP_USERNAME")},
           to: [{"User", email_address}],
           subject: "New Drive Record - #{drive.car.name}",
           html_body: generate_drive_email_html(drive),
@@ -261,7 +261,7 @@ defmodule TeslaMate.Email do
         system_info = get_system_info()
         
         email = %Swoosh.Email{
-          from: {System.get_env("EMAIL_FROM_NAME", "TeslaMate"), System.get_env("EMAIL_FROM_ADDRESS", "teslamate@example.com")},
+          from: {System.get_env("EMAIL_FROM_NAME", "TeslaMate"), System.get_env("SMTP_USERNAME")},
           to: [{"User", email_address}],
           subject: "TeslaMate Service Started",
           html_body: generate_startup_email_html(system_info),
