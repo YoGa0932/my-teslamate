@@ -469,6 +469,8 @@ defmodule TeslaMate.Email do
     case TeslaMate.Repo.query(query, [car_id, yesterday, now]) do
       {:ok, %{rows: [[_date, range_km] | _]}} when is_number(range_km) ->
         Float.round(range_km, 1)
+      {:ok, %{rows: [[_date, %Decimal{} = range_km] | _]}} ->
+        Float.round(Decimal.to_float(range_km), 1)
       _ ->
         nil
     end
