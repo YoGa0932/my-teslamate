@@ -215,7 +215,17 @@ defmodule TeslaMate.Email do
            "duration_min", "ascent", "descent", "start_position_id", "end_position_id",
            "start_address_id", "end_address_id", "start_geofence_id", "end_geofence_id", "avg_speed"],
           row,
-          fn field, value -> {String.to_atom(field), value} end
+          fn field, value -> 
+            case field do
+              "avg_speed" -> 
+                case value do
+                  %Decimal{} -> {String.to_atom(field), Decimal.to_float(value)}
+                  value when is_number(value) -> {String.to_atom(field), value}
+                  _ -> {String.to_atom(field), nil}
+                end
+              _ -> {String.to_atom(field), value}
+            end
+          end
         ) |> Map.new()
         
         # Preload associations
@@ -257,7 +267,17 @@ defmodule TeslaMate.Email do
            "start_battery_level", "end_battery_level", "duration_min", "outside_temp_avg", "cost",
            "position_id", "address_id", "geofence_id", "power_avg"],
           row,
-          fn field, value -> {String.to_atom(field), value} end
+          fn field, value -> 
+            case field do
+              "power_avg" -> 
+                case value do
+                  %Decimal{} -> {String.to_atom(field), Decimal.to_float(value)}
+                  value when is_number(value) -> {String.to_atom(field), value}
+                  _ -> {String.to_atom(field), nil}
+                end
+              _ -> {String.to_atom(field), value}
+            end
+          end
         ) |> Map.new()
         
         # Preload associations
