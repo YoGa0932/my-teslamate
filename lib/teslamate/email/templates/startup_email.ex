@@ -111,7 +111,7 @@ defmodule TeslaMate.Email.Templates.StartupEmail do
             </div>
             <div class="stat-box">
               <div class="label">📊 Avg Speed</div>
-              <div class="value">#{info.latest_drive.distance / (info.latest_drive.duration_min / 60) |> Float.round(1)} km/h</div>
+              <div class="value">#{if info.latest_drive.avg_speed, do: "#{Float.round(info.latest_drive.avg_speed, 1)} km/h", else: "Not available"}</div>
             </div>
           </div>
 
@@ -255,7 +255,7 @@ defmodule TeslaMate.Email.Templates.StartupEmail do
             </div>
             <div class="stat-box">
               <div class="label">⚡ Avg Power</div>
-              <div class="value">#{if info.latest_charging.duration_min && info.latest_charging.charge_energy_added, do: "#{Float.round(info.latest_charging.charge_energy_added / (info.latest_charging.duration_min / 60), 1)} kW", else: "Not available"}</div>
+              <div class="value">#{if info.latest_charging.power_avg, do: "#{Float.round(info.latest_charging.power_avg, 1)} kW", else: "Not available"}</div>
             </div>
           </div>
 
@@ -361,7 +361,7 @@ defmodule TeslaMate.Email.Templates.StartupEmail do
       - 📏 Distance: #{Float.round(info.latest_drive.distance, 2)} km
       - ⏱️ Duration: #{info.latest_drive.duration_min} minutes
       - 🏎️ Max Speed: #{info.latest_drive.speed_max} km/h
-      - 📊 Avg Speed: #{info.latest_drive.distance / (info.latest_drive.duration_min / 60) |> Float.round(1)} km/h
+      - 📊 Avg Speed: #{if info.latest_drive.avg_speed, do: "#{Float.round(info.latest_drive.avg_speed, 1)} km/h", else: "Not available"}
 
       🔋 Power Information:
       - 🔋 Max Power: #{info.latest_drive.power_max} kW
@@ -407,7 +407,7 @@ defmodule TeslaMate.Email.Templates.StartupEmail do
       - ⚡ Energy Added: #{info.latest_charging.charge_energy_added} kWh
       - ⏱️ Duration: #{info.latest_charging.duration_min} minutes
       - 💰 Cost: #{if info.latest_charging.cost, do: "#{info.latest_charging.cost} 元", else: "Not available"}
-      - ⚡ Avg Power: #{if info.latest_charging.duration_min && info.latest_charging.charge_energy_added, do: "#{Float.round(info.latest_charging.charge_energy_added / (info.latest_charging.duration_min / 60), 1)} kW", else: "Not available"}
+      - ⚡ Avg Power: #{if info.latest_charging.power_avg, do: "#{Float.round(info.latest_charging.power_avg, 1)} kW", else: "Not available"}
 
       🔋 Battery Information:
       - 🔋 Start Battery Level: #{info.latest_charging.start_battery_level}%

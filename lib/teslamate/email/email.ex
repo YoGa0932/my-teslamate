@@ -24,7 +24,16 @@ defmodule TeslaMate.Email do
 
       email_address ->
         Logger.info("Attempting to send drive notification email to: #{email_address}", car_id: drive.car_id, drive_id: drive.id)
-        drive = TeslaMate.Repo.preload(drive, [:car, :start_address, :end_address, :start_geofence, :end_geofence])
+        # Calculate avg_speed and add it to the drive struct
+        drive_with_avg_speed = case drive.duration_min do
+          duration when duration > 0 -> 
+            avg_speed = drive.distance / (duration / 60.0)
+            Map.put(drive, :avg_speed, avg_speed)
+          _ -> 
+            Map.put(drive, :avg_speed, nil)
+        end
+        
+        drive = TeslaMate.Repo.preload(drive_with_avg_speed, [:car, :start_address, :end_address, :start_geofence, :end_geofence])
 
         email = %Swoosh.Email{
           from: {System.get_env("EMAIL_FROM_NAME", "TeslaMate"), System.get_env("SMTP_USERNAME")},
@@ -74,7 +83,16 @@ defmodule TeslaMate.Email do
 
       email_address ->
         Logger.info("Attempting to send charging notification email to: #{email_address}", car_id: charging_process.car_id, charging_process_id: charging_process.id)
-        charging_process = TeslaMate.Repo.preload(charging_process, [:car, :address, :geofence])
+        # Calculate power_avg and add it to the charging_process struct
+        charging_with_power_avg = case charging_process.duration_min do
+          duration when duration > 0 -> 
+            power_avg = charging_process.charge_energy_added / (duration / 60.0)
+            Map.put(charging_process, :power_avg, power_avg)
+          _ -> 
+            Map.put(charging_process, :power_avg, nil)
+        end
+        
+        charging_process = TeslaMate.Repo.preload(charging_with_power_avg, [:car, :address, :geofence])
 
         email = %Swoosh.Email{
           from: {System.get_env("EMAIL_FROM_NAME", "TeslaMate"), System.get_env("SMTP_USERNAME")},
@@ -175,28 +193,90 @@ defmodule TeslaMate.Email do
   end
 
   defp get_latest_drive() do
-    Drive
-    |> order_by(desc: :end_date)
-    |> limit(1)
-    |> Repo.one()
-    |> case do
-      nil -> nil
-      drive -> 
-        drive
-        |> Repo.preload([:car, :start_address, :end_address, :start_geofence, :end_geofence])
+    query = """
+    SELECT 
+      d.*,
+      CASE 
+        WHEN d.duration_min > 0 THEN d.distance / (d.duration_min / 60.0)
+        ELSE NULL 
+      END as avg_speed
+    FROM drives d
+    ORDER BY d.end_date DESC
+    LIMIT 1
+    """
+    
+    case Repo.query(query) do
+      {:ok, %{rows: [row]}} ->
+        # Convert row to struct with calculated avg_speed
+        drive_data = Enum.zip_with(
+          ["id", "car_id", "start_date", "end_date", "outside_temp_avg", "inside_temp_avg", 
+           "speed_max", "power_max", "power_min", "start_ideal_range_km", "end_ideal_range_km",
+           "start_rated_range_km", "end_rated_range_km", "start_km", "end_km", "distance", 
+           "duration_min", "ascent", "descent", "start_position_id", "end_position_id",
+           "start_address_id", "end_address_id", "start_geofence_id", "end_geofence_id", "avg_speed"],
+          row,
+          fn field, value -> {String.to_atom(field), value} end
+        ) |> Map.new()
+        
+        # Create a struct-like map with the calculated avg_speed
+        drive = Map.put(drive_data, :avg_speed, drive_data.avg_speed)
+        
+        # Preload associations
+        drive_id = drive_data.id
+        Drive
+        |> where(id: ^drive_id)
+        |> Repo.one()
+        |> case do
+          nil -> nil
+          drive -> 
+            drive
+            |> Repo.preload([:car, :start_address, :end_address, :start_geofence, :end_geofence])
+            |> Map.put(:avg_speed, drive_data.avg_speed)
+        end
+        
+      _ -> nil
     end
   end
 
   defp get_latest_charging() do
-    ChargingProcess
-    |> order_by(desc: :end_date)
-    |> limit(1)
-    |> Repo.one()
-    |> case do
-      nil -> nil
-      charging -> 
-        charging
-        |> Repo.preload([:car, :address, :geofence])
+    query = """
+    SELECT 
+      cp.*,
+      CASE 
+        WHEN cp.duration_min > 0 THEN cp.charge_energy_added / (cp.duration_min / 60.0)
+        ELSE NULL 
+      END as power_avg
+    FROM charging_processes cp
+    ORDER BY cp.end_date DESC
+    LIMIT 1
+    """
+    
+    case Repo.query(query) do
+      {:ok, %{rows: [row]}} ->
+        # Convert row to struct with calculated power_avg
+        charging_data = Enum.zip_with(
+          ["id", "car_id", "start_date", "end_date", "charge_energy_added", "charge_energy_used",
+           "start_ideal_range_km", "end_ideal_range_km", "start_rated_range_km", "end_rated_range_km",
+           "start_battery_level", "end_battery_level", "duration_min", "outside_temp_avg", "cost",
+           "position_id", "address_id", "geofence_id", "power_avg"],
+          row,
+          fn field, value -> {String.to_atom(field), value} end
+        ) |> Map.new()
+        
+        # Preload associations
+        charging_id = charging_data.id
+        ChargingProcess
+        |> where(id: ^charging_id)
+        |> Repo.one()
+        |> case do
+          nil -> nil
+          charging -> 
+            charging
+            |> Repo.preload([:car, :address, :geofence])
+            |> Map.put(:power_avg, charging_data.power_avg)
+        end
+        
+      _ -> nil
     end
   end
 

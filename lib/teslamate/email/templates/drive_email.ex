@@ -64,7 +64,7 @@ defmodule TeslaMate.Email.Templates.DriveEmail do
               </div>
               <div class="stat-box">
                 <div class="label">📊 Avg Speed</div>
-                <div class="value">#{drive.distance / (drive.duration_min / 60) |> Float.round(1)} km/h</div>
+                <div class="value">#{if drive.avg_speed, do: "#{Float.round(drive.avg_speed, 1)} km/h", else: "Not available"}</div>
               </div>
             </div>
           </div>
@@ -201,7 +201,7 @@ defmodule TeslaMate.Email.Templates.DriveEmail do
     - 📏 Distance: #{Float.round(drive.distance, 2)} km
     - ⏱️ Duration: #{drive.duration_min} minutes
     - 🏎️ Max Speed: #{drive.speed_max} km/h
-    - 📊 Avg Speed: #{drive.distance / (drive.duration_min / 60) |> Float.round(1)} km/h
+    - 📊 Avg Speed: #{if drive.avg_speed, do: "#{Float.round(drive.avg_speed, 1)} km/h", else: "Not available"}
 
     🔋 Power Information:
     - 🔋 Max Power: #{drive.power_max} kW
