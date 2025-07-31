@@ -54,10 +54,16 @@ defmodule TeslaMate.Email do
         
         drive = TeslaMate.Repo.preload(drive_with_calculations, [:car, :start_address, :end_address, :start_geofence, :end_geofence])
 
+        # Generate drive subject with location and stats
+        start_location = if drive.start_geofence, do: drive.start_geofence.name, else: drive.start_address.name
+        end_location = if drive.end_geofence, do: drive.end_geofence.name, else: drive.end_address.name
+        drive_time = TeslaMate.Email.format_datetime_local(drive.start_date)
+        drive_subject = "🚗 [#{drive_time}] #{start_location} → #{end_location} (#{Float.round(drive.distance, 1)}km, #{drive.duration_min}min)"
+        
         email = %Swoosh.Email{
           from: {System.get_env("EMAIL_FROM_NAME", "TeslaMate"), System.get_env("SMTP_USERNAME")},
           to: [{"User", email_address}],
-          subject: "New Drive Record - #{drive.car.name}",
+          subject: drive_subject,
           html_body: TeslaMate.Email.Templates.DriveEmail.generate_html(drive),
           text_body: TeslaMate.Email.Templates.DriveEmail.generate_text(drive)
         }
@@ -113,10 +119,15 @@ defmodule TeslaMate.Email do
         
         charging_process = TeslaMate.Repo.preload(charging_with_power_avg, [:car, :address, :geofence])
 
+        # Generate charging subject with location and stats
+        charging_location = if charging_process.geofence, do: charging_process.geofence.name, else: charging_process.address.name
+        charging_time = TeslaMate.Email.format_datetime_local(charging_process.start_date)
+        charging_subject = "🔋 [#{charging_time}] #{charging_location} (#{Float.round(charging_process.charge_energy_added, 1)}kWh, #{charging_process.duration_min}min)"
+        
         email = %Swoosh.Email{
           from: {System.get_env("EMAIL_FROM_NAME", "TeslaMate"), System.get_env("SMTP_USERNAME")},
           to: [{"User", email_address}],
-          subject: "Charging Complete - #{charging_process.car.name}",
+          subject: charging_subject,
           html_body: TeslaMate.Email.Templates.ChargingEmail.generate_html(charging_process),
           text_body: TeslaMate.Email.Templates.ChargingEmail.generate_text(charging_process)
         }
@@ -164,10 +175,14 @@ defmodule TeslaMate.Email do
         
         system_info = get_system_info()
         
+        # Generate startup subject with current time
+        startup_time = TeslaMate.Email.format_datetime_local(DateTime.utc_now())
+        startup_subject = "🚀 [#{startup_time}] TeslaMate Service Started"
+        
         email = %Swoosh.Email{
           from: {System.get_env("EMAIL_FROM_NAME", "TeslaMate"), System.get_env("SMTP_USERNAME")},
           to: [{"User", email_address}],
-          subject: "TeslaMate Service Started",
+          subject: startup_subject,
           html_body: TeslaMate.Email.Templates.StartupEmail.generate_html(system_info),
           text_body: TeslaMate.Email.Templates.StartupEmail.generate_text(system_info)
         }
