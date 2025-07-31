@@ -394,5 +394,42 @@ defmodule TeslaMate.Email do
   end
   def format_datetime_local(_), do: "Unknown"
 
+  @doc """
+  Get the latest estimated range for a car
+  """
+  def get_latest_range(car_id) do
+    # Get current time and 24 hours ago
+    now = DateTime.utc_now()
+    yesterday = DateTime.add(now, -24 * 60 * 60, :second)
+    
+    # Query for latest range from positions or charges
+    query = """
+    SELECT date AS "time", range as "range_km"
+    FROM (
+      (SELECT date, est_battery_range_km AS range
+       FROM positions
+       WHERE car_id = $1 AND est_battery_range_km IS NOT NULL 
+       AND date BETWEEN $2 AND $3
+       ORDER BY date DESC
+       LIMIT 1)
+      UNION ALL
+      (SELECT date, ideal_battery_range_km AS range
+       FROM charges c
+       JOIN charging_processes p ON p.id = c.charging_process_id
+       WHERE p.car_id = $1 AND date BETWEEN $2 AND $3
+       ORDER BY date DESC
+       LIMIT 1)
+    ) AS data
+    ORDER BY date DESC
+    LIMIT 1
+    """
+    
+    case TeslaMate.Repo.query(query, [car_id, yesterday, now]) do
+      {:ok, %{rows: [[_date, range_km] | _]}} when is_number(range_km) ->
+        Float.round(range_km, 1)
+      _ ->
+        nil
+    end
+  end
 
 end 

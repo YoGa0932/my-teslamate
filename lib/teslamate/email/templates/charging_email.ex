@@ -77,12 +77,12 @@ defmodule TeslaMate.Email.Templates.ChargingEmail do
                 <div class="value">#{charging_process.end_battery_level}%</div>
               </div>
               <div class="info-row">
-                <div class="label">📊 Start Ideal Range</div>
-                <div class="value">#{charging_process.start_ideal_range_km} km</div>
+                <div class="label">📊 Start Rated Range</div>
+                <div class="value">#{charging_process.start_rated_range_km} km</div>
               </div>
               <div class="info-row">
-                <div class="label">📊 End Ideal Range</div>
-                <div class="value">#{charging_process.end_ideal_range_km} km</div>
+                <div class="label">📊 End Rated Range</div>
+                <div class="value">#{charging_process.end_rated_range_km} km</div>
               </div>
             </div>
           </div>
@@ -145,8 +145,8 @@ defmodule TeslaMate.Email.Templates.ChargingEmail do
     🔋 Battery Information:
     - 🔋 Start Battery Level: #{charging_process.start_battery_level}%
     - 🔋 End Battery Level: #{charging_process.end_battery_level}%
-    - 📊 Start Ideal Range: #{charging_process.start_ideal_range_km} km
-    - 📈 End Ideal Range: #{charging_process.end_ideal_range_km} km
+    - 📊 Start Rated Range: #{charging_process.start_rated_range_km} km
+    - 📈 End Rated Range: #{charging_process.end_rated_range_km} km
 
     📍 Charging Location:
     - 🏁 Charging Location: #{if charging_process.geofence, do: charging_process.geofence.name, else: "#{charging_process.address.name}, #{charging_process.address.city}"}

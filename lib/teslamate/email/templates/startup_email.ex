@@ -174,20 +174,24 @@ defmodule TeslaMate.Email.Templates.StartupEmail do
             <h3>🔋 Battery Information</h3>
             <div class="info-grid">
               <div class="info-row">
-                <div class="label">🔋 Start Ideal Range</div>
-                <div class="value">#{info.latest_drive.start_ideal_range_km} km</div>
-              </div>
-              <div class="info-row">
-                <div class="label">🔋 End Ideal Range</div>
-                <div class="value">#{info.latest_drive.end_ideal_range_km} km</div>
-              </div>
-              <div class="info-row">
                 <div class="label">📊 Start Rated Range</div>
                 <div class="value">#{info.latest_drive.start_rated_range_km} km</div>
               </div>
               <div class="info-row">
                 <div class="label">📊 End Rated Range</div>
                 <div class="value">#{info.latest_drive.end_rated_range_km} km</div>
+              </div>
+              <div class="info-row">
+                <div class="label">⚡ Energy Consumption</div>
+                <div class="value">#{if info.latest_drive.start_rated_range_km && info.latest_drive.end_rated_range_km && info.latest_drive.distance && info.latest_drive.car.efficiency, do: Float.round(Kernel.max(0, info.latest_drive.start_rated_range_km - info.latest_drive.end_rated_range_km) * info.latest_drive.car.efficiency * 1000 / info.latest_drive.distance, 1), else: "N/A"} Wh/km</div>
+              </div>
+              <div class="info-row">
+                <div class="label">🔋 Energy Used</div>
+                <div class="value">#{if info.latest_drive.start_rated_range_km && info.latest_drive.end_rated_range_km && info.latest_drive.car.efficiency, do: Float.round(Kernel.max(0, info.latest_drive.start_rated_range_km - info.latest_drive.end_rated_range_km) * info.latest_drive.car.efficiency, 3), else: "N/A"} kWh</div>
+              </div>
+              <div class="info-row">
+                <div class="label">📊 Estimated Range</div>
+                <div class="value">#{TeslaMate.Email.get_latest_range(info.latest_drive.car_id)} km</div>
               </div>
             </div>
           </div>
@@ -265,12 +269,12 @@ defmodule TeslaMate.Email.Templates.StartupEmail do
                 <div class="value">#{info.latest_charging.end_battery_level}%</div>
               </div>
               <div class="info-row">
-                <div class="label">📊 Start Ideal Range</div>
-                <div class="value">#{info.latest_charging.start_ideal_range_km} km</div>
+                <div class="label">📊 Start Rated Range</div>
+                <div class="value">#{info.latest_charging.start_rated_range_km} km</div>
               </div>
               <div class="info-row">
-                <div class="label">📊 End Ideal Range</div>
-                <div class="value">#{info.latest_charging.end_ideal_range_km} km</div>
+                <div class="label">📊 End Rated Range</div>
+                <div class="value">#{info.latest_charging.end_rated_range_km} km</div>
               </div>
             </div>
           </div>
@@ -374,10 +378,11 @@ defmodule TeslaMate.Email.Templates.StartupEmail do
       - 🎯 End: #{if info.latest_drive.end_geofence, do: info.latest_drive.end_geofence.name, else: "#{info.latest_drive.end_address.name}, #{info.latest_drive.end_address.city}"}
 
       🔋 Battery Information:
-      - 🔋 Start Ideal Range: #{info.latest_drive.start_ideal_range_km} km
-      - 🔋 End Ideal Range: #{info.latest_drive.end_ideal_range_km} km
       - 📊 Start Rated Range: #{info.latest_drive.start_rated_range_km} km
       - 📊 End Rated Range: #{info.latest_drive.end_rated_range_km} km
+      - ⚡ Energy Consumption: #{if info.latest_drive.start_rated_range_km && info.latest_drive.end_rated_range_km && info.latest_drive.distance && info.latest_drive.car.efficiency, do: Float.round(Kernel.max(0, info.latest_drive.start_rated_range_km - info.latest_drive.end_rated_range_km) * info.latest_drive.car.efficiency * 1000 / info.latest_drive.distance, 1), else: "N/A"} Wh/km
+      - 🔋 Energy Used: #{if info.latest_drive.start_rated_range_km && info.latest_drive.end_rated_range_km && info.latest_drive.car.efficiency, do: Float.round(Kernel.max(0, info.latest_drive.start_rated_range_km - info.latest_drive.end_rated_range_km) * info.latest_drive.car.efficiency, 3), else: "N/A"} kWh
+      - 📊 Estimated Range: #{TeslaMate.Email.get_latest_range(info.latest_drive.car_id)} km
 
       🌡️ Environment Information:
       - 🌡️ Avg Outside Temp: #{info.latest_drive.outside_temp_avg}°C
@@ -406,8 +411,8 @@ defmodule TeslaMate.Email.Templates.StartupEmail do
       🔋 Battery Information:
       - 🔋 Start Battery Level: #{info.latest_charging.start_battery_level}%
       - 🔋 End Battery Level: #{info.latest_charging.end_battery_level}%
-      - 📊 Start Ideal Range: #{info.latest_charging.start_ideal_range_km} km
-      - 📈 End Ideal Range: #{info.latest_charging.end_ideal_range_km} km
+      - 📊 Start Rated Range: #{info.latest_charging.start_rated_range_km} km
+      - 📈 End Rated Range: #{info.latest_charging.end_rated_range_km} km
 
       📍 Charging Location:
       - 🏁 Charging Location: #{if info.latest_charging.geofence, do: info.latest_charging.geofence.name, else: "#{info.latest_charging.address.name}, #{info.latest_charging.address.city}"}
