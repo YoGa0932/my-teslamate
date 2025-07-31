@@ -111,7 +111,7 @@ defmodule TeslaMate.Email.Templates.StartupEmail do
             </div>
             <div class="stat-box">
               <div class="label">📊 Avg Speed</div>
-              <div class="value">#{Float.round(Decimal.to_float(info.latest_drive.avg_speed), 1)} km/h</div>
+              <div class="value">#{Float.round(info.latest_drive.avg_speed, 1)} km/h</div>
             </div>
           </div>
 
@@ -255,7 +255,7 @@ defmodule TeslaMate.Email.Templates.StartupEmail do
             </div>
             <div class="stat-box">
               <div class="label">⚡ Avg Power</div>
-              <div class="value">#{Float.round(Decimal.to_float(info.latest_charging.power_avg), 1)} kW</div>
+              <div class="value">#{Float.round(info.latest_charging.power_avg, 1)} kW</div>
             </div>
           </div>
 
@@ -361,7 +361,7 @@ defmodule TeslaMate.Email.Templates.StartupEmail do
       - 📏 Distance: #{info.latest_drive.distance} km
       - ⏱️ Duration: #{info.latest_drive.duration_min} minutes
       - 🏎️ Max Speed: #{info.latest_drive.speed_max} km/h
-      - 📊 Avg Speed: #{Float.round(Decimal.to_float(info.latest_drive.avg_speed), 1)} km/h
+      - 📊 Avg Speed: #{Float.round(info.latest_drive.avg_speed, 1)} km/h
 
       🔋 Power Information:
       - 🔋 Max Power: #{info.latest_drive.power_max} kW
@@ -407,7 +407,7 @@ defmodule TeslaMate.Email.Templates.StartupEmail do
       - ⚡ Energy Added: #{info.latest_charging.charge_energy_added} kWh
       - ⏱️ Duration: #{info.latest_charging.duration_min} minutes
       - 💰 Cost: #{if info.latest_charging.cost, do: "#{info.latest_charging.cost} 元", else: "Not available"}
-      - ⚡ Avg Power: #{Float.round(Decimal.to_float(info.latest_charging.power_avg), 1)} kW
+      - ⚡ Avg Power: #{Float.round(info.latest_charging.power_avg, 1)} kW
 
       🔋 Battery Information:
       - 🔋 Start Battery Level: #{info.latest_charging.start_battery_level}%

@@ -60,7 +60,7 @@ defmodule TeslaMate.Email.Templates.ChargingEmail do
               </div>
               <div class="stat-box">
                 <div class="label">⚡ Avg Power</div>
-                <div class="value">#{Float.round(Decimal.to_float(charging_process.power_avg), 1)} kW</div>
+                <div class="value">#{Float.round(charging_process.power_avg, 1)} kW</div>
               </div>
             </div>
           </div>
@@ -140,7 +140,7 @@ defmodule TeslaMate.Email.Templates.ChargingEmail do
     - ⚡ Energy Added: #{charging_process.charge_energy_added} kWh
     - ⏱️ Duration: #{charging_process.duration_min} minutes
     - 💰 Cost: #{if charging_process.cost, do: "#{charging_process.cost} 元", else: "Not available"}
-    - ⚡ Avg Power: #{Float.round(Decimal.to_float(charging_process.power_avg), 1)} kW
+    - ⚡ Avg Power: #{Float.round(charging_process.power_avg, 1)} kW
 
     🔋 Battery Information:
     - 🔋 Start Battery Level: #{charging_process.start_battery_level}%
