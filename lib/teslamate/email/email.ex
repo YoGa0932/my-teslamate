@@ -218,9 +218,6 @@ defmodule TeslaMate.Email do
           fn field, value -> {String.to_atom(field), value} end
         ) |> Map.new()
         
-        # Create a struct-like map with the calculated avg_speed
-        drive = Map.put(drive_data, :avg_speed, drive_data.avg_speed)
-        
         # Preload associations
         drive_id = drive_data.id
         Drive
