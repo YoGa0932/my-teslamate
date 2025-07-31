@@ -449,7 +449,7 @@ defmodule TeslaMate.Email do
 
     amap_key = System.get_env("AMAP_KEY")
     
-    Logger.debug("Generating route map", 
+    Logger.info("Generating route map", 
       positions_count: length(positions),
       simplified_count: length(simplified_positions),
       center_coords: {center_lat, center_lng},
