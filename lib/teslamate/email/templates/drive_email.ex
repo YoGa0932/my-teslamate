@@ -35,8 +35,7 @@ defmodule TeslaMate.Email.Templates.DriveEmail do
         .environment-section .info-row { border-left-color: #20c997; }
         .time-section .info-row { border-left-color: #6c757d; }
         .footer { background-color: #f8f9fa; padding: 20px; text-align: center; color: #666; font-size: 12px; border-top: 1px solid #eee; }
-        .route-map-section { margin-top: 20px; }
-        .route-map-container { margin-top: 15px; }
+
       </style>
     </head>
     <body>
@@ -175,12 +174,7 @@ defmodule TeslaMate.Email.Templates.DriveEmail do
             </div>
           </div>
 
-          <div class="section route-map-section">
-            <h3>🗺️ Route Map</h3>
-            <div class="route-map-container">
-              #{TeslaMate.Email.generate_route_map_html(drive.id)}
-            </div>
-          </div>
+
         </div>
 
         <div class="footer">
