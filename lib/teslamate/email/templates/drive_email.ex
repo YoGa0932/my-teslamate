@@ -52,7 +52,7 @@ defmodule TeslaMate.Email.Templates.DriveEmail do
             <div class="stats">
               <div class="stat-box">
                 <div class="label">📏 Distance</div>
-                <div class="value">#{drive.distance} km</div>
+                <div class="value">#{Float.round(drive.distance, 3)} km</div>
               </div>
               <div class="stat-box">
                 <div class="label">⏱️ Duration</div>
@@ -88,11 +88,11 @@ defmodule TeslaMate.Email.Templates.DriveEmail do
             <div class="info-grid">
               <div class="info-row">
                 <div class="label">🏁 Start Odometer</div>
-                <div class="value">#{drive.start_km} km</div>
+                <div class="value">#{Float.round(drive.start_km, 3)} km</div>
               </div>
               <div class="info-row">
                 <div class="label">🎯 End Odometer</div>
-                <div class="value">#{drive.end_km} km</div>
+                <div class="value">#{Float.round(drive.end_km, 3)} km</div>
               </div>
             </div>
           </div>
@@ -198,7 +198,7 @@ defmodule TeslaMate.Email.Templates.DriveEmail do
     New Drive Record - #{drive.car.name}
 
     📊 Drive Statistics:
-    - 📏 Distance: #{drive.distance} km
+    - 📏 Distance: #{Float.round(drive.distance, 3)} km
     - ⏱️ Duration: #{drive.duration_min} minutes
     - 🏎️ Max Speed: #{drive.speed_max} km/h
     - 📊 Avg Speed: #{Float.round(drive.avg_speed, 1)} km/h
@@ -208,8 +208,8 @@ defmodule TeslaMate.Email.Templates.DriveEmail do
     - 🔋 Min Power: #{drive.power_min} kW
 
     📏 Odometer Information:
-    - 🏁 Start Odometer: #{drive.start_km} km
-    - 🎯 End Odometer: #{drive.end_km} km
+    - 🏁 Start Odometer: #{Float.round(drive.start_km, 3)} km
+    - 🎯 End Odometer: #{Float.round(drive.end_km, 3)} km
 
     🏔️ Elevation Information:
     - 📈 Total Ascent: #{drive.ascent} m

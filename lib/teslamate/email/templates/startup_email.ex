@@ -99,7 +99,7 @@ defmodule TeslaMate.Email.Templates.StartupEmail do
           <div class="stats">
             <div class="stat-box">
               <div class="label">📏 Distance</div>
-              <div class="value">#{info.latest_drive.distance} km</div>
+              <div class="value">#{Float.round(info.latest_drive.distance, 3)} km</div>
             </div>
             <div class="stat-box">
               <div class="label">⏱️ Duration</div>
@@ -134,11 +134,11 @@ defmodule TeslaMate.Email.Templates.StartupEmail do
             <div class="info-grid">
               <div class="info-row">
                 <div class="label">🏁 Start Odometer</div>
-                <div class="value">#{info.latest_drive.start_km} km</div>
+                <div class="value">#{Float.round(info.latest_drive.start_km, 3)} km</div>
               </div>
               <div class="info-row">
                 <div class="label">🎯 End Odometer</div>
-                <div class="value">#{info.latest_drive.end_km} km</div>
+                <div class="value">#{Float.round(info.latest_drive.end_km, 3)} km</div>
               </div>
             </div>
           </div>
@@ -358,7 +358,7 @@ defmodule TeslaMate.Email.Templates.StartupEmail do
       Latest Drive Record - #{info.latest_drive.car.name}:
 
       📊 Drive Statistics:
-      - 📏 Distance: #{info.latest_drive.distance} km
+      - 📏 Distance: #{Float.round(info.latest_drive.distance, 3)} km
       - ⏱️ Duration: #{info.latest_drive.duration_min} minutes
       - 🏎️ Max Speed: #{info.latest_drive.speed_max} km/h
       - 📊 Avg Speed: #{Float.round(info.latest_drive.avg_speed, 1)} km/h
@@ -368,8 +368,8 @@ defmodule TeslaMate.Email.Templates.StartupEmail do
       - 🔋 Min Power: #{info.latest_drive.power_min} kW
 
       📏 Odometer Information:
-      - 🏁 Start Odometer: #{info.latest_drive.start_km} km
-      - 🎯 End Odometer: #{info.latest_drive.end_km} km
+      - 🏁 Start Odometer: #{Float.round(info.latest_drive.start_km, 3)} km
+      - 🎯 End Odometer: #{Float.round(info.latest_drive.end_km, 3)} km
 
       🏔️ Elevation Information:
       - 📈 Total Ascent: #{info.latest_drive.ascent} m

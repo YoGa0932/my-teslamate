@@ -448,12 +448,19 @@ defmodule TeslaMate.Email do
     path_string = build_path_string(simplified_positions)
 
     amap_key = System.get_env("AMAP_KEY")
+    
+    Logger.debug("Generating route map", 
+      positions_count: length(positions),
+      simplified_count: length(simplified_positions),
+      center_coords: {center_lat, center_lng},
+      path_string_length: String.length(path_string)
+    )
     url = "https://restapi.amap.com/v3/staticmap?" <>
           "key=#{amap_key}&" <>
           "location=#{center_lng},#{center_lat}&" <>
           "zoom=13&" <>
           "size=600*400&" <>
-          "paths=5,0x0000ff,1,,:#{path_string}&" <>
+          "paths=5,0x0000ff,1,0:#{path_string}&" <>
           "markers=mid,0x00ff00,A:#{Decimal.to_float(List.first(simplified_positions).longitude)},#{Decimal.to_float(List.first(simplified_positions).latitude)}&" <>
           "markers=mid,0xff0000,B:#{Decimal.to_float(List.last(simplified_positions).longitude)},#{Decimal.to_float(List.last(simplified_positions).latitude)}"
 
