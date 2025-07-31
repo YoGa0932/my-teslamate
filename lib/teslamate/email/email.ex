@@ -246,26 +246,27 @@ defmodule TeslaMate.Email do
     case Repo.query(query) do
       {:ok, %{rows: [row]}} ->
         # Convert row to struct with calculated fields
-        drive_data = Enum.zip_with(
-          ["id", "car_id", "start_date", "end_date", "outside_temp_avg", "inside_temp_avg", 
-           "speed_max", "power_max", "power_min", "start_ideal_range_km", "end_ideal_range_km",
-           "start_rated_range_km", "end_rated_range_km", "start_km", "end_km", "distance", 
-           "duration_min", "ascent", "descent", "start_position_id", "end_position_id",
-           "start_address_id", "end_address_id", "start_geofence_id", "end_geofence_id", "avg_speed",
-           "energy_consumption_wh_per_km", "energy_used_kwh"],
-          row,
-          fn field, value -> 
-            case field do
-              field_name when field_name in ["avg_speed", "energy_consumption_wh_per_km", "energy_used_kwh"] -> 
-                case value do
-                  %Decimal{} -> {String.to_atom(field), Float.round(Decimal.to_float(value), 1)}
-                  value when is_number(value) -> {String.to_atom(field), Float.round(value, 1)}
-                  _ -> {String.to_atom(field), nil}
-                end
-              _ -> {String.to_atom(field), value}
-            end
+        # Get the actual column names from the query result
+        columns = ["id", "car_id", "start_date", "end_date", "outside_temp_avg", "inside_temp_avg", 
+                   "speed_max", "power_max", "power_min", "start_ideal_range_km", "end_ideal_range_km",
+                   "start_rated_range_km", "end_rated_range_km", "start_km", "end_km", "distance", 
+                   "duration_min", "ascent", "descent", "start_position_id", "end_position_id",
+                   "start_address_id", "end_address_id", "start_geofence_id", "end_geofence_id", "avg_speed",
+                   "energy_consumption_wh_per_km", "energy_used_kwh"]
+        
+        drive_data = Enum.zip_with(columns, row, fn field, value -> 
+          case field do
+            field_name when field_name in ["avg_speed", "energy_consumption_wh_per_km", "energy_used_kwh"] -> 
+              case value do
+                %Decimal{} -> {String.to_atom(field), Float.round(Decimal.to_float(value), 1)}
+                value when is_number(value) -> {String.to_atom(field), Float.round(value, 1)}
+                _ -> {String.to_atom(field), nil}
+              end
+            _ -> {String.to_atom(field), value}
           end
-        ) |> Map.new()
+        end) |> Map.new()
+        
+
         
         # Preload associations
         drive_id = drive_data.id
@@ -275,9 +276,11 @@ defmodule TeslaMate.Email do
         |> case do
           nil -> nil
           drive -> 
-            drive
-            |> Repo.preload([:car, :start_address, :end_address, :start_geofence, :end_geofence])
-            |> Map.put(:avg_speed, drive_data.avg_speed)
+                    drive
+        |> Repo.preload([:car, :start_address, :end_address, :start_geofence, :end_geofence])
+        |> Map.put(:avg_speed, drive_data.avg_speed)
+        |> Map.put(:energy_consumption_wh_per_km, drive_data.energy_consumption_wh_per_km)
+        |> Map.put(:energy_used_kwh, drive_data.energy_used_kwh)
         end
         
       _ -> nil
