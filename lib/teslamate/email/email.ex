@@ -24,16 +24,35 @@ defmodule TeslaMate.Email do
 
       email_address ->
         Logger.info("Attempting to send drive notification email to: #{email_address}", car_id: drive.car_id, drive_id: drive.id)
-        # Calculate avg_speed and add it to the drive struct
-        drive_with_avg_speed = case drive.duration_min do
+        # Calculate avg_speed and energy consumption and add them to the drive struct
+        drive_with_calculations = case drive.duration_min do
           duration when duration > 0 -> 
             avg_speed = drive.distance / (duration / 60.0)
-            Map.put(drive, :avg_speed, avg_speed)
+            drive_with_speed = Map.put(drive, :avg_speed, avg_speed)
+            
+            # Calculate energy consumption if we have the required data
+            case {drive.start_rated_range_km, drive.end_rated_range_km, drive.distance, drive.car.efficiency} do
+              {start_range, end_range, distance, efficiency} when not is_nil(start_range) and not is_nil(end_range) and not is_nil(distance) and not is_nil(efficiency) ->
+                range_diff = Decimal.to_float(start_range) - Decimal.to_float(end_range)
+                energy_consumption = if range_diff > 0, do: range_diff * efficiency * 1000 / distance, else: 0
+                energy_used = if range_diff > 0, do: range_diff * efficiency, else: 0
+                
+                drive_with_speed
+                |> Map.put(:energy_consumption_wh_per_km, Float.round(energy_consumption, 1))
+                |> Map.put(:energy_used_kwh, Float.round(energy_used, 3))
+              
+              _ ->
+                drive_with_speed
+                |> Map.put(:energy_consumption_wh_per_km, nil)
+                |> Map.put(:energy_used_kwh, nil)
+            end
           _ -> 
             Map.put(drive, :avg_speed, nil)
+            |> Map.put(:energy_consumption_wh_per_km, nil)
+            |> Map.put(:energy_used_kwh, nil)
         end
         
-        drive = TeslaMate.Repo.preload(drive_with_avg_speed, [:car, :start_address, :end_address, :start_geofence, :end_geofence])
+        drive = TeslaMate.Repo.preload(drive_with_calculations, [:car, :start_address, :end_address, :start_geofence, :end_geofence])
 
         email = %Swoosh.Email{
           from: {System.get_env("EMAIL_FROM_NAME", "TeslaMate"), System.get_env("SMTP_USERNAME")},
@@ -199,28 +218,48 @@ defmodule TeslaMate.Email do
       CASE 
         WHEN d.duration_min > 0 THEN d.distance / (d.duration_min / 60.0)
         ELSE NULL 
-      END as avg_speed
+      END as avg_speed,
+      CASE 
+        WHEN d.start_rated_range_km IS NOT NULL AND d.end_rated_range_km IS NOT NULL AND d.distance IS NOT NULL AND c.efficiency IS NOT NULL THEN
+          CASE 
+            WHEN (d.start_rated_range_km - d.end_rated_range_km) > 0 THEN 
+              (d.start_rated_range_km - d.end_rated_range_km) * c.efficiency * 1000 / d.distance
+            ELSE 0 
+          END
+        ELSE NULL 
+      END as energy_consumption_wh_per_km,
+      CASE 
+        WHEN d.start_rated_range_km IS NOT NULL AND d.end_rated_range_km IS NOT NULL AND c.efficiency IS NOT NULL THEN
+          CASE 
+            WHEN (d.start_rated_range_km - d.end_rated_range_km) > 0 THEN 
+              (d.start_rated_range_km - d.end_rated_range_km) * c.efficiency
+            ELSE 0 
+          END
+        ELSE NULL 
+      END as energy_used_kwh
     FROM drives d
+    JOIN cars c ON c.id = d.car_id
     ORDER BY d.end_date DESC
     LIMIT 1
     """
     
     case Repo.query(query) do
       {:ok, %{rows: [row]}} ->
-        # Convert row to struct with calculated avg_speed
+        # Convert row to struct with calculated fields
         drive_data = Enum.zip_with(
           ["id", "car_id", "start_date", "end_date", "outside_temp_avg", "inside_temp_avg", 
            "speed_max", "power_max", "power_min", "start_ideal_range_km", "end_ideal_range_km",
            "start_rated_range_km", "end_rated_range_km", "start_km", "end_km", "distance", 
            "duration_min", "ascent", "descent", "start_position_id", "end_position_id",
-           "start_address_id", "end_address_id", "start_geofence_id", "end_geofence_id", "avg_speed"],
+           "start_address_id", "end_address_id", "start_geofence_id", "end_geofence_id", "avg_speed",
+           "energy_consumption_wh_per_km", "energy_used_kwh"],
           row,
           fn field, value -> 
             case field do
-              "avg_speed" -> 
+              field_name when field_name in ["avg_speed", "energy_consumption_wh_per_km", "energy_used_kwh"] -> 
                 case value do
-                  %Decimal{} -> {String.to_atom(field), Decimal.to_float(value)}
-                  value when is_number(value) -> {String.to_atom(field), value}
+                  %Decimal{} -> {String.to_atom(field), Float.round(Decimal.to_float(value), 1)}
+                  value when is_number(value) -> {String.to_atom(field), Float.round(value, 1)}
                   _ -> {String.to_atom(field), nil}
                 end
               _ -> {String.to_atom(field), value}
