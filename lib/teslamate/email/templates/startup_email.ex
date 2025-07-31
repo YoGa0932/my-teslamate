@@ -99,7 +99,7 @@ defmodule TeslaMate.Email.Templates.StartupEmail do
           <div class="stats">
             <div class="stat-box">
               <div class="label">📏 Distance</div>
-              <div class="value">#{Float.round(Decimal.to_float(info.latest_drive.distance), 2)} km</div>
+              <div class="value">#{info.latest_drive.distance} km</div>
             </div>
             <div class="stat-box">
               <div class="label">⏱️ Duration</div>
@@ -111,7 +111,7 @@ defmodule TeslaMate.Email.Templates.StartupEmail do
             </div>
             <div class="stat-box">
               <div class="label">📊 Avg Speed</div>
-              <div class="value">#{if info.latest_drive.avg_speed, do: "#{Float.round(Decimal.to_float(info.latest_drive.avg_speed), 1)} km/h", else: "Not available"}</div>
+              <div class="value">#{Float.round(Decimal.to_float(info.latest_drive.avg_speed), 1)} km/h</div>
             </div>
           </div>
 
@@ -134,11 +134,11 @@ defmodule TeslaMate.Email.Templates.StartupEmail do
             <div class="info-grid">
               <div class="info-row">
                 <div class="label">🏁 Start Odometer</div>
-                <div class="value">#{Float.round(Decimal.to_float(info.latest_drive.start_km), 1)} km</div>
+                <div class="value">#{info.latest_drive.start_km} km</div>
               </div>
               <div class="info-row">
                 <div class="label">🎯 End Odometer</div>
-                <div class="value">#{Float.round(Decimal.to_float(info.latest_drive.end_km), 1)} km</div>
+                <div class="value">#{info.latest_drive.end_km} km</div>
               </div>
             </div>
           </div>
@@ -255,7 +255,7 @@ defmodule TeslaMate.Email.Templates.StartupEmail do
             </div>
             <div class="stat-box">
               <div class="label">⚡ Avg Power</div>
-              <div class="value">#{if info.latest_charging.power_avg, do: "#{Float.round(Decimal.to_float(info.latest_charging.power_avg), 1)} kW", else: "Not available"}</div>
+              <div class="value">#{Float.round(Decimal.to_float(info.latest_charging.power_avg), 1)} kW</div>
             </div>
           </div>
 
@@ -358,18 +358,18 @@ defmodule TeslaMate.Email.Templates.StartupEmail do
       Latest Drive Record - #{info.latest_drive.car.name}:
 
       📊 Drive Statistics:
-      - 📏 Distance: #{Float.round(Decimal.to_float(info.latest_drive.distance), 2)} km
+      - 📏 Distance: #{info.latest_drive.distance} km
       - ⏱️ Duration: #{info.latest_drive.duration_min} minutes
       - 🏎️ Max Speed: #{info.latest_drive.speed_max} km/h
-      - 📊 Avg Speed: #{if info.latest_drive.avg_speed, do: "#{Float.round(Decimal.to_float(info.latest_drive.avg_speed), 1)} km/h", else: "Not available"}
+      - 📊 Avg Speed: #{Float.round(Decimal.to_float(info.latest_drive.avg_speed), 1)} km/h
 
       🔋 Power Information:
       - 🔋 Max Power: #{info.latest_drive.power_max} kW
       - 🔋 Min Power: #{info.latest_drive.power_min} kW
 
       📏 Odometer Information:
-      - 🏁 Start Odometer: #{Float.round(Decimal.to_float(info.latest_drive.start_km), 1)} km
-      - 🎯 End Odometer: #{Float.round(Decimal.to_float(info.latest_drive.end_km), 1)} km
+      - 🏁 Start Odometer: #{info.latest_drive.start_km} km
+      - 🎯 End Odometer: #{info.latest_drive.end_km} km
 
       🏔️ Elevation Information:
       - 📈 Total Ascent: #{info.latest_drive.ascent} m
@@ -407,7 +407,7 @@ defmodule TeslaMate.Email.Templates.StartupEmail do
       - ⚡ Energy Added: #{info.latest_charging.charge_energy_added} kWh
       - ⏱️ Duration: #{info.latest_charging.duration_min} minutes
       - 💰 Cost: #{if info.latest_charging.cost, do: "#{info.latest_charging.cost} 元", else: "Not available"}
-      - ⚡ Avg Power: #{if info.latest_charging.power_avg, do: "#{Float.round(Decimal.to_float(info.latest_charging.power_avg), 1)} kW", else: "Not available"}
+      - ⚡ Avg Power: #{Float.round(Decimal.to_float(info.latest_charging.power_avg), 1)} kW
 
       🔋 Battery Information:
       - 🔋 Start Battery Level: #{info.latest_charging.start_battery_level}%

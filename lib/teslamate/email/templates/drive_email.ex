@@ -52,7 +52,7 @@ defmodule TeslaMate.Email.Templates.DriveEmail do
             <div class="stats">
               <div class="stat-box">
                 <div class="label">📏 Distance</div>
-                <div class="value">#{Float.round(Decimal.to_float(drive.distance), 2)} km</div>
+                <div class="value">#{drive.distance} km</div>
               </div>
               <div class="stat-box">
                 <div class="label">⏱️ Duration</div>
@@ -64,7 +64,7 @@ defmodule TeslaMate.Email.Templates.DriveEmail do
               </div>
               <div class="stat-box">
                 <div class="label">📊 Avg Speed</div>
-                <div class="value">#{if drive.avg_speed, do: "#{Float.round(Decimal.to_float(drive.avg_speed), 1)} km/h", else: "Not available"}</div>
+                <div class="value">#{Float.round(Decimal.to_float(drive.avg_speed), 1)} km/h</div>
               </div>
             </div>
           </div>
@@ -88,11 +88,11 @@ defmodule TeslaMate.Email.Templates.DriveEmail do
             <div class="info-grid">
               <div class="info-row">
                 <div class="label">🏁 Start Odometer</div>
-                <div class="value">#{Float.round(Decimal.to_float(drive.start_km), 1)} km</div>
+                <div class="value">#{drive.start_km} km</div>
               </div>
               <div class="info-row">
                 <div class="label">🎯 End Odometer</div>
-                <div class="value">#{Float.round(Decimal.to_float(drive.end_km), 1)} km</div>
+                <div class="value">#{drive.end_km} km</div>
               </div>
             </div>
           </div>
@@ -198,18 +198,18 @@ defmodule TeslaMate.Email.Templates.DriveEmail do
     New Drive Record - #{drive.car.name}
 
     📊 Drive Statistics:
-    - 📏 Distance: #{Float.round(Decimal.to_float(drive.distance), 2)} km
+    - 📏 Distance: #{drive.distance} km
     - ⏱️ Duration: #{drive.duration_min} minutes
     - 🏎️ Max Speed: #{drive.speed_max} km/h
-    - 📊 Avg Speed: #{if drive.avg_speed, do: "#{Float.round(Decimal.to_float(drive.avg_speed), 1)} km/h", else: "Not available"}
+    - 📊 Avg Speed: #{Float.round(Decimal.to_float(drive.avg_speed), 1)} km/h
 
     🔋 Power Information:
     - 🔋 Max Power: #{drive.power_max} kW
     - 🔋 Min Power: #{drive.power_min} kW
 
     📏 Odometer Information:
-    - 🏁 Start Odometer: #{Float.round(Decimal.to_float(drive.start_km), 1)} km
-    - 🎯 End Odometer: #{Float.round(Decimal.to_float(drive.end_km), 1)} km
+    - 🏁 Start Odometer: #{drive.start_km} km
+    - 🎯 End Odometer: #{drive.end_km} km
 
     🏔️ Elevation Information:
     - 📈 Total Ascent: #{drive.ascent} m
