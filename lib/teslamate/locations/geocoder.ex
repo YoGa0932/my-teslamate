@@ -34,8 +34,10 @@ defmodule TeslaMate.Locations.Geocoder do
         {:error, {:geocoding_failed, "Invalid coordinates"}}
       
       {lat_f, lon_f} ->
-        case wgs84_to_gcj02(lon_f, lat_f) do
-          {gcj_lon, gcj_lat} when is_number(gcj_lon) and is_number(gcj_lat) ->
+        # Step 1: Use Amap coordinate conversion API to convert WGS84 to GCJ-02
+        case convert_coordinates_with_amap(lon_f, lat_f) do
+          {:ok, {gcj_lon, gcj_lat}} ->
+            # Step 2: Use converted coordinates for reverse geocoding
             opts = [
               key: get_amap_key(),
               location: "#{gcj_lon},#{gcj_lat}",
@@ -53,8 +55,9 @@ defmodule TeslaMate.Locations.Geocoder do
                 {:error, reason}
             end
           
-          {:error, :invalid_coordinates} ->
-            {:error, {:geocoding_failed, "Invalid coordinates"}}
+          {:error, reason} ->
+            Logger.error("Coordinate conversion failed", reason: reason)
+            {:error, {:geocoding_failed, "Coordinate conversion failed: #{reason}"}}
         end
     end
   end
@@ -327,57 +330,60 @@ defmodule TeslaMate.Locations.Geocoder do
     end
   end
 
-  def wgs84_to_gcj02(lng, lat) when is_number(lng) and is_number(lat) do
-    a = 6378245.0
-    ee = 0.00669342162296594323
-    
-    d_lat = transform_lat(lng - 105.0, lat - 35.0)
-    d_lng = transform_lng(lng - 105.0, lat - 35.0)
-    
-    rad_lat = lat * :math.pi / 180.0
-    magic = :math.sin(rad_lat)
-    magic = 1 - ee * magic * magic
-    sqrt_magic = :math.sqrt(magic)
-    
-    d_lat = (d_lat * 180.0) / ((a * (1 - ee)) / (magic * sqrt_magic) * :math.pi)
-    d_lng = (d_lng * 180.0) / (a / sqrt_magic * :math.cos(rad_lat) * :math.pi)
-    
-    mg_lat = lat + d_lat
-    mg_lng = lng + d_lng
-    
-    {mg_lng, mg_lat}
+
+
+  # Use Amap coordinate conversion API
+  defp convert_coordinates_with_amap(lng, lat) when is_number(lng) and is_number(lat) do
+    opts = [
+      key: get_amap_key(),
+      locations: "#{lng},#{lat}",
+      coordsys: "gps"  # gps means input is WGS84 coordinates
+    ]
+
+    case query("/v3/assistant/coordinate/convert", "zh", opts) do
+      {:ok, %{"status" => "1", "locations" => locations}} ->
+        case String.split(locations, ",") do
+          [lng_str, lat_str] ->
+            case {Float.parse(lng_str), Float.parse(lat_str)} do
+              {{lng_float, _}, {lat_float, _}} ->
+                {:ok, {lng_float, lat_float}}
+              _ ->
+                Logger.error("Failed to parse converted coordinates", locations: locations)
+                {:error, "Invalid coordinate format"}
+            end
+          _ ->
+            Logger.error("Invalid coordinate conversion response", locations: locations)
+            {:error, "Invalid response format"}
+        end
+      
+      {:ok, %{"status" => "0", "info" => reason}} ->
+        Logger.error("Coordinate conversion API failed", reason: reason)
+        {:error, reason}
+      
+      {:error, reason} ->
+        Logger.error("Coordinate conversion API request failed", reason: reason)
+        {:error, reason}
+      
+      _ ->
+        Logger.error("Unexpected coordinate conversion response")
+        {:error, "Unexpected response"}
+    end
   end
 
-  def wgs84_to_gcj02(%Decimal{} = lng, %Decimal{} = lat) do
-    wgs84_to_gcj02(Decimal.to_float(lng), Decimal.to_float(lat))
+  defp convert_coordinates_with_amap(%Decimal{} = lng, %Decimal{} = lat) do
+    convert_coordinates_with_amap(Decimal.to_float(lng), Decimal.to_float(lat))
   end
 
-  def wgs84_to_gcj02(lng, %Decimal{} = lat) when is_number(lng) do
-    wgs84_to_gcj02(lng, Decimal.to_float(lat))
+  defp convert_coordinates_with_amap(lng, %Decimal{} = lat) when is_number(lng) do
+    convert_coordinates_with_amap(lng, Decimal.to_float(lat))
   end
 
-  def wgs84_to_gcj02(%Decimal{} = lng, lat) when is_number(lat) do
-    wgs84_to_gcj02(Decimal.to_float(lng), lat)
+  defp convert_coordinates_with_amap(%Decimal{} = lng, lat) when is_number(lat) do
+    convert_coordinates_with_amap(Decimal.to_float(lng), lat)
   end
 
-  def wgs84_to_gcj02(_lng, _lat) do
+  defp convert_coordinates_with_amap(_lng, _lat) do
     {:error, :invalid_coordinates}
-  end
-
-  defp transform_lat(x, y) do
-    ret = -100.0 + 2.0 * x + 3.0 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * :math.sqrt(abs(x))
-    ret = ret + (20.0 * :math.sin(6.0 * x * :math.pi) + 20.0 * :math.sin(2.0 * x * :math.pi)) * 2.0 / 3.0
-    ret = ret + (20.0 * :math.sin(y * :math.pi) + 40.0 * :math.sin(y / 3.0 * :math.pi)) * 2.0 / 3.0
-    ret = ret + (160.0 * :math.sin(y / 12.0 * :math.pi) + 320 * :math.sin(y * :math.pi / 30.0)) * 2.0 / 3.0
-    ret
-  end
-
-  defp transform_lng(x, y) do
-    ret = 300.0 + x + 2.0 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * :math.sqrt(abs(x))
-    ret = ret + (20.0 * :math.sin(6.0 * x * :math.pi) + 20.0 * :math.sin(2.0 * x * :math.pi)) * 2.0 / 3.0
-    ret = ret + (20.0 * :math.sin(x * :math.pi) + 40.0 * :math.sin(x / 3.0 * :math.pi)) * 2.0 / 3.0
-    ret = ret + (150.0 * :math.sin(x / 12.0 * :math.pi) + 300.0 * :math.sin(x / 30.0 * :math.pi)) * 2.0 / 3.0
-    ret
   end
 
 

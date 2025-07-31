@@ -502,6 +502,14 @@ defmodule TeslaMate.Log do
 
     with {:ok, cproc} <- charging_process |> ChargingProcess.changeset(attrs) |> Repo.update(),
          {:ok, _car} <- recalculate_efficiency(charging_process.car, settings) do
+      # Preload all associations needed for email
+      charging_process_with_associations = Repo.preload(cproc, [
+        :car, 
+        :address, 
+        :geofence
+      ])
+      # Send charging completion email notification
+      Task.start(fn -> TeslaMate.Email.send_charging_notification(charging_process_with_associations) end)
       {:ok, cproc}
     end
   end

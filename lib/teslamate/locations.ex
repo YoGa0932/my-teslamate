@@ -35,10 +35,19 @@ defmodule TeslaMate.Locations do
   def find_address(%{latitude: lat, longitude: lng}) do
     %GlobalSettings{language: lang} = Settings.get_global_settings!()
 
+    Logger.debug("Starting address lookup", 
+      coordinates: {lat, lng}, 
+      language: lang,
+      geocoder: if(@geocoder == Geocoder, do: "Amap API", else: "Mock")
+    )
+
     case @geocoder.reverse_lookup(lat, lng, lang) do
       {:ok, %{osm_id: id, osm_type: type} = attrs} ->
+        Logger.debug("Geocoding successful", osm_id: id, osm_type: type)
+        
         case Repo.get_by(Address, osm_id: id, osm_type: type) do
           %Address{} = address ->
+            Logger.debug("Found existing address in database", address_id: address.id)
             {:ok, address}
           nil ->
             case find_address_by_coordinates(lat, lng) do
@@ -51,6 +60,11 @@ defmodule TeslaMate.Locations do
               nil ->
                 case create_address(attrs) do
                   {:ok, address} ->
+                    Logger.info("Created new address", 
+                      address_id: address.id, 
+                      osm_id: id, 
+                      osm_type: type
+                    )
                     {:ok, address}
                   {:error, changeset} ->
                     Logger.error("Failed to create new address", errors: inspect(changeset.errors))
