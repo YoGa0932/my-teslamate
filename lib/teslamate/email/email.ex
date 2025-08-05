@@ -374,8 +374,7 @@ defmodule TeslaMate.Email do
       {distance, duration} when not is_nil(distance) and not is_nil(duration) and duration > 0 ->
         Float.round(distance / (duration / 60.0), 1)
       _ ->
-        Logger.info("Cannot calculate avg_speed: missing distance or duration", 
-                      distance: drive_data.distance, duration: drive_data.duration_min)
+        Logger.info("Cannot calculate avg_speed: missing distance or duration - distance: #{drive_data.distance}, duration: #{drive_data.duration_min}")
         nil
     end
 
@@ -387,24 +386,19 @@ defmodule TeslaMate.Email do
         start_range_float = if is_struct(start_range, Decimal), do: Decimal.to_float(start_range), else: start_range
         end_range_float = if is_struct(end_range, Decimal), do: Decimal.to_float(end_range), else: end_range
         range_diff = start_range_float - end_range_float
-        Logger.info("Energy calculation debug", start_range: start_range, end_range: end_range, range_diff: range_diff, efficiency: efficiency, distance: distance)
-        Logger.info("Detailed energy calculation values", start_range_float: start_range_float, end_range_float: end_range_float, range_diff: range_diff, efficiency: efficiency, distance: distance)
+        Logger.info("Energy calculation debug - start_range: #{start_range}, end_range: #{end_range}, range_diff: #{range_diff}, efficiency: #{efficiency}, distance: #{distance}")
+        Logger.info("Detailed energy calculation values - start_range_float: #{start_range_float}, end_range_float: #{end_range_float}, range_diff: #{range_diff}, efficiency: #{efficiency}, distance: #{distance}")
         if range_diff > 0 do
           energy_consumption = range_diff * efficiency * 1000 / distance
           energy_used = range_diff * efficiency
           Logger.info("Energy calculation successful", energy_consumption: energy_consumption, energy_used: energy_used)
           {Float.round(energy_consumption, 1), Float.round(energy_used, 3)}
         else
-          Logger.info("Range change is not positive, cannot calculate energy consumption", 
-                        start_range: start_range, end_range: end_range, range_diff: range_diff)
+          Logger.info("Range change is not positive, cannot calculate energy consumption - start_range: #{start_range}, end_range: #{end_range}, range_diff: #{range_diff}")
           {nil, nil}
         end
       _ ->
-        Logger.info("Cannot calculate energy consumption: missing required data", 
-                      start_range: drive_data.start_rated_range_km, 
-                      end_range: drive_data.end_rated_range_km,
-                      distance: drive_data.distance, 
-                      efficiency: drive_data.efficiency)
+        Logger.info("Cannot calculate energy consumption: missing required data - start_range: #{drive_data.start_rated_range_km}, end_range: #{drive_data.end_rated_range_km}, distance: #{drive_data.distance}, efficiency: #{drive_data.efficiency}")
         {nil, nil}
     end
 
@@ -729,45 +723,45 @@ defmodule TeslaMate.Email do
         "http://localhost:5001"
     end
     
-    Logger.info("Using map service URL", service_url: service_url, drive_id: drive_id)
+    Logger.info("Using map service URL - service_url: #{service_url}, drive_id: #{drive_id}")
     request_body = Jason.encode!(%{drive_id: drive_id})
-    Logger.info("Map service request", drive_id: drive_id, request_body: request_body)
+    Logger.info("Map service request - drive_id: #{drive_id}, request_body: #{request_body}")
     case Finch.build(:post, "#{service_url}/generate_map", 
          [{"Content-Type", "application/json"}], 
          request_body)
          |> Finch.request(Finch, timeout: 30000) do
         
         {:ok, %Finch.Response{status: 200, body: body}} ->
-          Logger.info("Map service response received", drive_id: drive_id, status: 200, body_length: byte_size(body))
+          Logger.info("Map service response received - drive_id: #{drive_id}, status: 200, body_length: #{byte_size(body)}")
           case Jason.decode(body) do
             {:ok, %{"success" => true, "image_base64" => image_base64, "drive_id" => ^drive_id} = map_info} ->
               Logger.info("地图生成成功", drive_id: drive_id)
               {:ok, image_base64, map_info}
             
             {:ok, %{"success" => false, "error" => error}} ->
-              Logger.info("地图服务返回错误", drive_id: drive_id, error: error)
+              Logger.info("地图服务返回错误 - drive_id: #{drive_id}, error: #{error}")
               {:error, error}
             
             {:ok, response} ->
-              Logger.info("地图服务响应格式异常", drive_id: drive_id, response: response)
+              Logger.info("地图服务响应格式异常 - drive_id: #{drive_id}, response: #{inspect(response)}")
               {:error, "响应格式异常"}
             
             {:error, decode_error} ->
-              Logger.info("解析地图服务响应失败", drive_id: drive_id, decode_error: decode_error, body: body)
+              Logger.info("解析地图服务响应失败 - drive_id: #{drive_id}, decode_error: #{inspect(decode_error)}, body: #{body}")
               {:error, "解析响应失败"}
           end
         
         {:ok, %Finch.Response{status: status_code, body: body}} ->
-          Logger.info("地图服务HTTP错误", status_code: status_code, body: body)
+          Logger.info("地图服务HTTP错误 - status_code: #{status_code}, body: #{body}")
           {:error, "HTTP #{status_code}"}
         
         {:error, reason} ->
-          Logger.info("地图服务连接失败", drive_id: drive_id, error: reason)
+          Logger.info("地图服务连接失败 - drive_id: #{drive_id}, error: #{inspect(reason)}")
           {:error, "连接失败"}
       end
   rescue
     e ->
-      Logger.info("地图服务调用失败", drive_id: drive_id, error: inspect(e))
+      Logger.info("地图服务调用失败 - drive_id: #{drive_id}, error: #{inspect(e)}")
       {:error, "服务调用失败"}
   end
 
