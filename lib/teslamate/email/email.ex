@@ -391,11 +391,14 @@ defmodule TeslaMate.Email do
         if range_diff > 0 do
           energy_consumption = range_diff * efficiency * 1000 / distance
           energy_used = range_diff * efficiency
-          Logger.info("Energy calculation successful", energy_consumption: energy_consumption, energy_used: energy_used)
+          Logger.info("Energy calculation successful - energy_consumption: #{energy_consumption}, energy_used: #{energy_used}")
           {Float.round(energy_consumption, 1), Float.round(energy_used, 3)}
         else
-          Logger.info("Range change is not positive, cannot calculate energy consumption - start_range: #{start_range}, end_range: #{end_range}, range_diff: #{range_diff}")
-          {nil, nil}
+          energy_gained = abs(range_diff) * efficiency
+          energy_consumption_gained = energy_gained * 1000 / distance
+          Logger.info("Vehicle gained range during drive - energy_gained: #{energy_gained}, energy_consumption_gained: #{energy_consumption_gained}")
+          Logger.info("This usually happens when the vehicle gains range during the drive (e.g., downhill with regeneration)")
+          {-Float.round(energy_consumption_gained, 1), -Float.round(energy_gained, 3)}
         end
       _ ->
         Logger.info("Cannot calculate energy consumption: missing required data - start_range: #{drive_data.start_rated_range_km}, end_range: #{drive_data.end_rated_range_km}, distance: #{drive_data.distance}, efficiency: #{drive_data.efficiency}")
@@ -729,7 +732,7 @@ defmodule TeslaMate.Email do
     case Finch.build(:post, "#{service_url}/generate_map", 
          [{"Content-Type", "application/json"}], 
          request_body)
-         |> Finch.request(Finch, timeout: 30000) do
+         |> Finch.request(TeslaMate.HTTP, timeout: 30000) do
         
         {:ok, %Finch.Response{status: 200, body: body}} ->
           Logger.info("Map service response received - drive_id: #{drive_id}, status: 200, body_length: #{byte_size(body)}")
