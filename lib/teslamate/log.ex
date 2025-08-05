@@ -577,7 +577,7 @@ defmodule TeslaMate.Log do
     if is_nil(charge_energy_added) or Decimal.equal?(charge_energy_added, Decimal.new("0")) do
       nil
     else
-      # Price priority: Geofence time-based price > Global default time-based price > Geofence fixed price > No price
+      # Price priority: Geofence fixed price > No price
       price_per_kwh = case charging_process.geofence do
         %{id: geofence_id} when not is_nil(geofence_id) ->
           # Use geofence fixed price
