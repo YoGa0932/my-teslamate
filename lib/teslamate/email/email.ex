@@ -338,10 +338,11 @@ defmodule TeslaMate.Email do
           {String.to_atom(field), value}
         end) |> Map.new()
         
-        # 在应用层进行复杂计算
+        Logger.info("Raw database row data", row: row)
+        Logger.info("Processed drive_data", drive_data: drive_data)
+        
         drive_with_calculations = calculate_drive_metrics(drive_data)
         
-        # 预加载关联数据
         drive_id = drive_data.id
         Drive
         |> where(id: ^drive_id)
@@ -369,7 +370,6 @@ defmodule TeslaMate.Email do
   end
 
   defp calculate_drive_metrics(drive_data) do
-    # 计算平均速度
     avg_speed = case {drive_data.distance, drive_data.duration_min} do
       {distance, duration} when not is_nil(distance) and not is_nil(duration) and duration > 0 ->
         Float.round(distance / (duration / 60.0), 1)
@@ -378,7 +378,6 @@ defmodule TeslaMate.Email do
         nil
     end
 
-    # 计算能量消耗
     {energy_consumption, energy_used} = case {drive_data.start_rated_range_km, drive_data.end_rated_range_km, 
                                               drive_data.distance, drive_data.efficiency} do
       {start_range, end_range, distance, efficiency} 
@@ -531,7 +530,7 @@ defmodule TeslaMate.Email do
           nil -> nil
           charging -> 
             # Calculate cost_per_kwh if cost and charge_energy_added are available
-            cost_per_kwh = case {charging_data.cost, charging_data.charge_energy_added} do
+            cost_per_kwh = case {charging.cost, charging.charge_energy_added} do
               {cost, energy_added} when not is_nil(cost) and not is_nil(energy_added) ->
                 try do
                   if Decimal.equal?(energy_added, Decimal.new("0")) do
