@@ -740,9 +740,14 @@ defmodule TeslaMate.Log do
       last_charging_cost_per_kwh = get_last_charging_cost_per_kwh(drive.car_id)
       
       if is_nil(last_charging_cost_per_kwh) do
-        nil
+        # 如果没有充电价格信息，使用默认值1元/度电
+        Decimal.mult(Decimal.new(Float.to_string(energy_used_kwh)), Decimal.new("1.0"))
+        |> Decimal.to_float()
+        |> Float.round(3)
       else
         Decimal.mult(Decimal.new(Float.to_string(energy_used_kwh)), last_charging_cost_per_kwh)
+        |> Decimal.to_float()
+        |> Float.round(3)
       end
     end
   end

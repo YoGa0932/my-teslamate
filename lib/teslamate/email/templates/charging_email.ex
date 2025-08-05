@@ -52,7 +52,7 @@ defmodule TeslaMate.Email.Templates.ChargingEmail do
               </div>
               <div class="stat-box">
                 <div class="label">⏱️ Duration</div>
-                <div class="value">#{charging_process.duration_min} minutes</div>
+                <div class="value">#{TeslaMate.Email.format_duration_minutes(charging_process.duration_min)}</div>
               </div>
               <div class="stat-box">
                 <div class="label">🔌 Charging Type</div>
@@ -60,7 +60,7 @@ defmodule TeslaMate.Email.Templates.ChargingEmail do
               </div>
               <div class="stat-box">
                 <div class="label">💰 Total Cost</div>
-                <div class="value">#{if charging_process.cost, do: "¥#{charging_process.cost}", else: "Not available"}</div>
+                <div class="value">#{if charging_process.cost, do: "¥#{Float.round(charging_process.cost, 2)}", else: "¥#{Float.round(charging_process.charge_energy_added * 1.0, 2)}"}</div>
               </div>
               <div class="stat-box">
                               <div class="label">💵 Price per kWh</div>
@@ -142,9 +142,9 @@ defmodule TeslaMate.Email.Templates.ChargingEmail do
 
     📊 Charging Statistics:
     - ⚡ Energy Added: #{charging_process.charge_energy_added} kWh
-    - ⏱️ Duration: #{charging_process.duration_min} minutes
+    - ⏱️ Duration: #{TeslaMate.Email.format_duration_minutes(charging_process.duration_min)}
     - 🔌 Charging Type: #{TeslaMate.Log.determine_charging_type(charging_process)}
-    - 💰 Total Cost: #{if charging_process.cost, do: "¥#{charging_process.cost}", else: "Not available"}
+    - 💰 Total Cost: #{if charging_process.cost, do: "¥#{Float.round(charging_process.cost, 2)}", else: "¥#{Float.round(charging_process.charge_energy_added * 1.0, 2)}"}
           - 💵 Price per kWh: #{if charging_process.cost_per_kwh, do: "¥#{charging_process.cost_per_kwh}/kWh", else: "N/A"}
     - ⚡ Avg Power: #{if charging_process.power_avg, do: "#{Float.round(charging_process.power_avg, 1)} kW", else: "N/A"}
     - ⚡ Energy Used (Grid): #{if charging_process.charge_energy_used, do: "#{charging_process.charge_energy_used} kWh", else: "N/A"}

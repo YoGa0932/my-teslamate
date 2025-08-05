@@ -132,10 +132,10 @@ defmodule TeslaMate.Email.Templates.StartupEmail do
               <div class="label">📏 Distance</div>
               <div class="value">#{Float.round(info.latest_drive.distance, 3)} km</div>
             </div>
-            <div class="stat-box">
-              <div class="label">⏱️ Duration</div>
-              <div class="value">#{info.latest_drive.duration_min} minutes</div>
-            </div>
+                          <div class="stat-box">
+                <div class="label">⏱️ Duration</div>
+                <div class="value">#{TeslaMate.Email.format_duration_minutes(info.latest_drive.duration_min)}</div>
+              </div>
             <div class="stat-box">
               <div class="label">🏎️ Max Speed</div>
               <div class="value">#{info.latest_drive.speed_max} km/h</div>
@@ -144,14 +144,14 @@ defmodule TeslaMate.Email.Templates.StartupEmail do
               <div class="label">📊 Avg Speed</div>
               <div class="value">#{Float.round(info.latest_drive.avg_speed, 1)} km/h</div>
             </div>
-            <div class="stat-box">
-              <div class="label">⚡ Energy Consumption</div>
-              <div class="value">#{if info.latest_drive.energy_consumption_wh_per_km, do: "#{info.latest_drive.energy_consumption_wh_per_km}", else: "N/A"} Wh/km</div>
-            </div>
-            <div class="stat-box">
-              <div class="label">🔋 Energy Used</div>
-              <div class="value">#{if info.latest_drive.energy_used_kwh, do: "#{info.latest_drive.energy_used_kwh}", else: "N/A"} kWh</div>
-            </div>
+                          <div class="stat-box">
+                <div class="label">⚡ Energy Consumption</div>
+                <div class="value">#{if info.latest_drive.energy_consumption_wh_per_km, do: "#{Float.round(info.latest_drive.energy_consumption_wh_per_km, 1)}", else: "N/A"} Wh/km</div>
+              </div>
+              <div class="stat-box">
+                <div class="label">🔋 Energy Used</div>
+                <div class="value">#{if info.latest_drive.energy_used_kwh, do: "#{Float.round(info.latest_drive.energy_used_kwh, 3)}", else: "N/A"} kWh</div>
+              </div>
             <div class="stat-box">
               <div class="label">📊 Estimated Range</div>
               <div class="value">#{TeslaMate.Email.get_latest_range(info.latest_drive.car_id)} km</div>
@@ -415,16 +415,16 @@ defmodule TeslaMate.Email.Templates.StartupEmail do
 
       📊 Drive Statistics:
       - 📏 Distance: #{Float.round(info.latest_drive.distance, 3)} km
-      - ⏱️ Duration: #{info.latest_drive.duration_min} minutes
+      - ⏱️ Duration: #{TeslaMate.Email.format_duration_minutes(info.latest_drive.duration_min)}
       - 🏎️ Max Speed: #{info.latest_drive.speed_max} km/h
       - 📊 Avg Speed: #{Float.round(info.latest_drive.avg_speed, 1)} km/h
-      - ⚡ Energy Consumption: #{if info.latest_drive.energy_consumption_wh_per_km, do: "#{info.latest_drive.energy_consumption_wh_per_km}", else: "N/A"} Wh/km
-      - 🔋 Energy Used: #{if info.latest_drive.energy_used_kwh, do: "#{info.latest_drive.energy_used_kwh}", else: "N/A"} kWh
+      - ⚡ Energy Consumption: #{if info.latest_drive.energy_consumption_wh_per_km, do: "#{Float.round(info.latest_drive.energy_consumption_wh_per_km, 1)}", else: "N/A"} Wh/km
+      - 🔋 Energy Used: #{if info.latest_drive.energy_used_kwh, do: "#{Float.round(info.latest_drive.energy_used_kwh, 3)}", else: "N/A"} kWh
       - 📊 Estimated Range: #{TeslaMate.Email.get_latest_range(info.latest_drive.car_id)} km
       - 💰 Drive Cost: #{if TeslaMate.Log.calculate_drive_cost(info.latest_drive), do: "¥#{TeslaMate.Log.calculate_drive_cost(info.latest_drive)}", else: "N/A"}
 
       ⏰ Time Information:
-      - 🕐 Start Time: #{TeslaMate.Email.format_datetime_local(info.latest_drive.start_date)} - 🕙 End Time: #{TeslaMate.Email.format_datetime_local(info.latest_drive.end_date)} (Duration: #{info.latest_drive.duration_min} minutes)
+      - 🕐 Start Time: #{TeslaMate.Email.format_datetime_local(info.latest_drive.start_date)} - 🕙 End Time: #{TeslaMate.Email.format_datetime_local(info.latest_drive.end_date)} (Duration: #{TeslaMate.Email.format_duration_minutes(info.latest_drive.duration_min)})
 
       📍 Route Information:
       - 📍 Route: #{case {info.latest_drive.start_geofence, info.latest_drive.start_address} do

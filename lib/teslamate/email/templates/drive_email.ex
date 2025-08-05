@@ -54,7 +54,7 @@ defmodule TeslaMate.Email.Templates.DriveEmail do
               </div>
               <div class="stat-box">
                 <div class="label">⏱️ Duration</div>
-                <div class="value">#{drive.duration_min} minutes</div>
+                <div class="value">#{TeslaMate.Email.format_duration_minutes(drive.duration_min)}</div>
               </div>
               <div class="stat-box">
                 <div class="label">🏎️ Max Speed</div>
@@ -229,7 +229,7 @@ defmodule TeslaMate.Email.Templates.DriveEmail do
 
     📊 Drive Statistics:
     - 📏 Distance: #{Float.round(drive.distance, 3)} km
-    - ⏱️ Duration: #{drive.duration_min} minutes
+    - ⏱️ Duration: #{TeslaMate.Email.format_duration_minutes(drive.duration_min)}
     - 🏎️ Max Speed: #{drive.speed_max} km/h
     - 📊 Avg Speed: #{Float.round(drive.avg_speed, 1)} km/h
     - ⚡ Energy Consumption: #{if drive.energy_consumption_wh_per_km, do: "#{drive.energy_consumption_wh_per_km}", else: "N/A"} Wh/km

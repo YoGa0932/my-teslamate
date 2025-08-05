@@ -455,9 +455,9 @@ defmodule TeslaMate.Email do
           unit_of_length: unit_of_length,
           unit_of_temperature: unit_of_temperature,
           preferred_range: preferred_range,
-          base_url: base_url,
-          grafana_url: grafana_url,
-          language: language,
+          base_url: (if is_nil(base_url) or base_url == "", do: "N/A", else: base_url),
+          grafana_url: (if is_nil(grafana_url) or grafana_url == "", do: "N/A", else: grafana_url),
+          language: (if is_nil(language) or language == "", do: "en", else: language),
           unit_of_pressure: unit_of_pressure,
           morning_peak_price: morning_peak_price,
           normal_price: normal_price,
@@ -555,6 +555,20 @@ defmodule TeslaMate.Email do
       _ -> "Unable to get"
     end
   end
+
+  def format_duration_minutes(minutes) when is_number(minutes) do
+    hours = div(minutes, 60)
+    remaining_minutes = rem(minutes, 60)
+    seconds = rem(round((minutes - trunc(minutes)) * 60), 60)
+    
+    cond do
+      hours > 0 -> "#{hours}h #{remaining_minutes}m #{seconds}s"
+      remaining_minutes > 0 -> "#{remaining_minutes}m #{seconds}s"
+      true -> "#{seconds}s"
+    end
+  end
+
+  def format_duration_minutes(_), do: "N/A"
 
   defp get_smtp_config() do
     username = case System.get_env("SMTP_USERNAME") do
