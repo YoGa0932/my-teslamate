@@ -564,6 +564,7 @@ defmodule TeslaMate.Log do
             END
           """)
         },
+        group_by: c.fast_charger_present,
         where: c.charging_process_id == ^id and c.charger_power > 0
 
     case Repo.one(query) do
