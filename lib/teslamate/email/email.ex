@@ -374,7 +374,7 @@ defmodule TeslaMate.Email do
       {distance, duration} when not is_nil(distance) and not is_nil(duration) and duration > 0 ->
         Float.round(distance / (duration / 60.0), 1)
       _ ->
-        Logger.warning("Cannot calculate avg_speed: missing distance or duration", 
+        Logger.info("Cannot calculate avg_speed: missing distance or duration", 
                       distance: drive_data.distance, duration: drive_data.duration_min)
         nil
     end
@@ -395,12 +395,12 @@ defmodule TeslaMate.Email do
           Logger.info("Energy calculation successful", energy_consumption: energy_consumption, energy_used: energy_used)
           {Float.round(energy_consumption, 1), Float.round(energy_used, 3)}
         else
-          Logger.warning("Range change is not positive, cannot calculate energy consumption", 
+          Logger.info("Range change is not positive, cannot calculate energy consumption", 
                         start_range: start_range, end_range: end_range, range_diff: range_diff)
           {nil, nil}
         end
       _ ->
-        Logger.warning("Cannot calculate energy consumption: missing required data", 
+        Logger.info("Cannot calculate energy consumption: missing required data", 
                       start_range: drive_data.start_rated_range_km, 
                       end_range: drive_data.end_rated_range_km,
                       distance: drive_data.distance, 
@@ -745,29 +745,29 @@ defmodule TeslaMate.Email do
               {:ok, image_base64, map_info}
             
             {:ok, %{"success" => false, "error" => error}} ->
-              Logger.warning("地图服务返回错误", drive_id: drive_id, error: error)
+              Logger.info("地图服务返回错误", drive_id: drive_id, error: error)
               {:error, error}
             
             {:ok, response} ->
-              Logger.error("地图服务响应格式异常", drive_id: drive_id, response: response)
+              Logger.info("地图服务响应格式异常", drive_id: drive_id, response: response)
               {:error, "响应格式异常"}
             
             {:error, decode_error} ->
-              Logger.error("解析地图服务响应失败", drive_id: drive_id, decode_error: decode_error, body: body)
+              Logger.info("解析地图服务响应失败", drive_id: drive_id, decode_error: decode_error, body: body)
               {:error, "解析响应失败"}
           end
         
         {:ok, %Finch.Response{status: status_code, body: body}} ->
-          Logger.error("地图服务HTTP错误", status_code: status_code, body: body)
+          Logger.info("地图服务HTTP错误", status_code: status_code, body: body)
           {:error, "HTTP #{status_code}"}
         
         {:error, reason} ->
-          Logger.error("地图服务连接失败", drive_id: drive_id, error: reason)
+          Logger.info("地图服务连接失败", drive_id: drive_id, error: reason)
           {:error, "连接失败"}
       end
   rescue
     e ->
-      Logger.error("地图服务调用失败", drive_id: drive_id, error: inspect(e))
+      Logger.info("地图服务调用失败", drive_id: drive_id, error: inspect(e))
       {:error, "服务调用失败"}
   end
 
