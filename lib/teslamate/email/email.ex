@@ -334,6 +334,9 @@ defmodule TeslaMate.Email do
                    "duration_min", "ascent", "descent", "start_position_id", "end_position_id",
                    "start_address_id", "end_address_id", "start_geofence_id", "end_geofence_id", "efficiency"]
         
+        Logger.info("Columns array", columns: columns)
+        Logger.info("Row array", row: row)
+        
         drive_data = Enum.zip_with(columns, row, fn field, value -> 
           {String.to_atom(field), value}
         end) |> Map.new()
