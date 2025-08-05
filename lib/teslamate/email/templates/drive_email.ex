@@ -3,7 +3,7 @@ defmodule TeslaMate.Email.Templates.DriveEmail do
   Drive completion notification email templates
   """
 
-  def generate_html(drive) do
+  def generate_html(drive, map_info \\ nil) do
     """
     <!DOCTYPE html>
     <html>
@@ -32,7 +32,6 @@ defmodule TeslaMate.Email.Templates.DriveEmail do
         .battery-section .info-row { border-left-color: #17a2b8; }
         .elevation-section .info-row { border-left-color: #6f42c1; }
         .route-section .info-row { border-left-color: #fd7e14; }
-        .environment-section .info-row { border-left-color: #20c997; }
         .time-section .info-row { border-left-color: #6c757d; }
         .footer { background-color: #f8f9fa; padding: 20px; text-align: center; color: #666; font-size: 12px; border-top: 1px solid #eee; }
 
@@ -65,6 +64,75 @@ defmodule TeslaMate.Email.Templates.DriveEmail do
                 <div class="label">📊 Avg Speed</div>
                 <div class="value">#{Float.round(drive.avg_speed, 1)} km/h</div>
               </div>
+              <div class="stat-box">
+                <div class="label">⚡ Energy Consumption</div>
+                <div class="value">#{if drive.energy_consumption_wh_per_km, do: "#{drive.energy_consumption_wh_per_km}", else: "N/A"} Wh/km</div>
+              </div>
+              <div class="stat-box">
+                <div class="label">🔋 Energy Used</div>
+                <div class="value">#{if drive.energy_used_kwh, do: "#{drive.energy_used_kwh}", else: "N/A"} kWh</div>
+              </div>
+              <div class="stat-box">
+                <div class="label">📊 Estimated Range</div>
+                <div class="value">#{TeslaMate.Email.get_latest_range(drive.car_id)} km</div>
+              </div>
+              <div class="stat-box">
+                <div class="label">💰 Drive Cost</div>
+                <div class="value">#{if TeslaMate.Log.calculate_drive_cost(drive), do: "¥#{TeslaMate.Log.calculate_drive_cost(drive)}", else: "N/A"}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section time-section">
+            <h3>⏰ Time Information</h3>
+            <div class="info-grid">
+              <div class="info-row">
+                <div class="label">⏰ Time Period</div>
+                <div class="value">#{TeslaMate.Email.format_datetime_local(drive.start_date)} - #{TeslaMate.Email.format_datetime_local(drive.end_date)} (Duration: #{drive.duration_min} minutes)</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section route-section">
+            <h3>📍 Route Information</h3>
+            <div class="info-grid">
+              <div class="info-row">
+                <div class="label">📍 Route</div>
+                <div class="value">#{case {drive.start_geofence, drive.start_address} do
+                  {geofence, address} when not is_nil(geofence) and not is_nil(address) ->
+                    start_loc = "#{geofence.name} (#{address.name})"
+                    case {drive.end_geofence, drive.end_address} do
+                      {end_geofence, end_address} when not is_nil(end_geofence) and not is_nil(end_address) ->
+                        "#{start_loc} → #{end_geofence.name} (#{end_address.name})"
+                      {nil, end_address} when not is_nil(end_address) ->
+                        "#{start_loc} → #{end_address.name}, #{end_address.city}"
+                      _ ->
+                        "#{start_loc} → Unknown Location"
+                    end
+                  {nil, address} when not is_nil(address) ->
+                    start_loc = "#{address.name}, #{address.city}"
+                    case {drive.end_geofence, drive.end_address} do
+                      {end_geofence, end_address} when not is_nil(end_geofence) and not is_nil(end_address) ->
+                        "#{start_loc} → #{end_geofence.name} (#{end_address.name})"
+                      {nil, end_address} when not is_nil(end_address) ->
+                        "#{start_loc} → #{end_address.name}, #{end_address.city}"
+                      _ ->
+                        "#{start_loc} → Unknown Location"
+                    end
+                  _ ->
+                    "Unknown Route"
+                end}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section battery-section">
+            <h3>🔋 Battery Information</h3>
+            <div class="info-grid">
+              <div class="info-row">
+                <div class="label">📊 Rated Range Change</div>
+                <div class="value">#{TeslaMate.Email.get_range_analysis(drive.start_rated_range_km, drive.end_rated_range_km, drive.distance)}</div>
+              </div>
             </div>
           </div>
 
@@ -86,12 +154,8 @@ defmodule TeslaMate.Email.Templates.DriveEmail do
             <h3>📏 Odometer Information</h3>
             <div class="info-grid">
               <div class="info-row">
-                <div class="label">🏁 Start Odometer</div>
-                <div class="value">#{Float.round(drive.start_km, 3)} km</div>
-              </div>
-              <div class="info-row">
-                <div class="label">🎯 End Odometer</div>
-                <div class="value">#{Float.round(drive.end_km, 3)} km</div>
+                <div class="label">📏 Odometer Change</div>
+                <div class="value">#{Float.round(drive.start_km, 3)} → #{Float.round(drive.end_km, 3)} km</div>
               </div>
             </div>
           </div>
@@ -110,74 +174,31 @@ defmodule TeslaMate.Email.Templates.DriveEmail do
             </div>
           </div>
 
-          <div class="section route-section">
-            <h3>📍 Route Information</h3>
-            <div class="info-grid">
-              <div class="info-row">
-                <div class="label">🏁 Start Location</div>
-                <div class="value">#{if drive.start_geofence, do: drive.start_geofence.name, else: "#{drive.start_address.name}, #{drive.start_address.city}"}</div>
+          #{case map_info do
+            %{coordinates_processed: processed_count} when not is_nil(processed_count) ->
+              map_generation_info = """
+              <div class="info-grid">
+                <div class="info-row">
+                  <div class="label">🗺️ Map Generation</div>
+                  <div class="value">Processed #{processed_count} coordinates via Python GPX Animator Service</div>
+                </div>
               </div>
-              <div class="info-row">
-                <div class="label">🎯 End Location</div>
-                <div class="value">#{if drive.end_geofence, do: drive.end_geofence.name, else: "#{drive.end_address.name}, #{drive.end_address.city}"}</div>
+              """
+              
+              """
+              <div class="section trajectory-section">
+                <h3>🗺️ Drive Trajectory</h3>
+                #{map_generation_info}
+                <div class="map-container" style="text-align: center; margin: 20px 0;">
+                  <img src="data:image/png;base64,#{map_info.image_base64}" 
+                       alt="Drive Trajectory" 
+                       style="width: 100%; max-width: 800px; height: auto; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);" />
+                </div>
               </div>
-            </div>
-          </div>
-
-          <div class="section battery-section">
-            <h3>🔋 Battery Information</h3>
-            <div class="info-grid">
-              <div class="info-row">
-                <div class="label">📊 Start Rated Range</div>
-                <div class="value">#{drive.start_rated_range_km} km</div>
-              </div>
-              <div class="info-row">
-                <div class="label">📊 End Rated Range</div>
-                <div class="value">#{drive.end_rated_range_km} km</div>
-              </div>
-                              <div class="info-row">
-                <div class="label">⚡ Energy Consumption</div>
-                <div class="value">#{if drive.energy_consumption_wh_per_km, do: "#{drive.energy_consumption_wh_per_km}", else: "N/A"} Wh/km</div>
-              </div>
-              <div class="info-row">
-                <div class="label">🔋 Energy Used</div>
-                <div class="value">#{if drive.energy_used_kwh, do: "#{drive.energy_used_kwh}", else: "N/A"} kWh</div>
-              </div>
-              <div class="info-row">
-                <div class="label">📊 Estimated Range</div>
-                <div class="value">#{TeslaMate.Email.get_latest_range(drive.car_id)} km</div>
-              </div>
-            </div>
-          </div>
-
-          <div class="section environment-section">
-            <h3>🌡️ Environment Information</h3>
-            <div class="info-grid">
-              <div class="info-row">
-                <div class="label">🌡️ Avg Outside Temp</div>
-                <div class="value">#{drive.outside_temp_avg}°C</div>
-              </div>
-              <div class="info-row">
-                <div class="label">🌡️ Avg Inside Temp</div>
-                <div class="value">#{drive.inside_temp_avg}°C</div>
-              </div>
-            </div>
-          </div>
-
-          <div class="section time-section">
-            <h3>⏰ Time Information</h3>
-            <div class="info-grid">
-              <div class="info-row">
-                <div class="label">🕐 Start Time</div>
-                <div class="value">#{TeslaMate.Email.format_datetime_local(drive.start_date)}</div>
-              </div>
-              <div class="info-row">
-                <div class="label">🕙 End Time</div>
-                <div class="value">#{TeslaMate.Email.format_datetime_local(drive.end_date)}</div>
-              </div>
-            </div>
-          </div>
-
+              """
+            _ ->
+              ""
+          end}
 
         </div>
 
@@ -191,7 +212,18 @@ defmodule TeslaMate.Email.Templates.DriveEmail do
     """
   end
 
-  def generate_text(drive) do
+  def generate_text(drive, map_info \\ nil) do
+    map_generation_text = if map_info && map_info.processing_time_seconds do
+      """
+      
+    🗺️ Map Generation:
+    - 📊 Coordinates Processed: #{map_info.coordinates_processed}
+    - ⏱️ Processing Time: #{map_info.processing_time_seconds} seconds
+    """
+    else
+      ""
+    end
+
     """
     New Drive Record - #{drive.car.name}
 
@@ -200,37 +232,53 @@ defmodule TeslaMate.Email.Templates.DriveEmail do
     - ⏱️ Duration: #{drive.duration_min} minutes
     - 🏎️ Max Speed: #{drive.speed_max} km/h
     - 📊 Avg Speed: #{Float.round(drive.avg_speed, 1)} km/h
+    - ⚡ Energy Consumption: #{if drive.energy_consumption_wh_per_km, do: "#{drive.energy_consumption_wh_per_km}", else: "N/A"} Wh/km
+    - 🔋 Energy Used: #{if drive.energy_used_kwh, do: "#{drive.energy_used_kwh}", else: "N/A"} kWh
+    - 📊 Estimated Range: #{TeslaMate.Email.get_latest_range(drive.car_id)} km
+    - 💰 Drive Cost: #{if TeslaMate.Log.calculate_drive_cost(drive), do: "¥#{TeslaMate.Log.calculate_drive_cost(drive)}", else: "N/A"}
 
-    🔋 Power Information:
+          ⏰ Time Information:
+      - 🕐 Start Time: #{TeslaMate.Email.format_datetime_local(drive.start_date)} - 🕙 End Time: #{TeslaMate.Email.format_datetime_local(drive.end_date)} (Duration: #{drive.duration_min} minutes)
+
+    📍 Route Information:
+    - 📍 Route: #{case {drive.start_geofence, drive.start_address} do
+      {geofence, address} when not is_nil(geofence) and not is_nil(address) ->
+        start_loc = "#{geofence.name} (#{address.name})"
+        case {drive.end_geofence, drive.end_address} do
+          {end_geofence, end_address} when not is_nil(end_geofence) and not is_nil(end_address) ->
+            "#{start_loc} → #{end_geofence.name} (#{end_address.name})"
+          {nil, end_address} when not is_nil(end_address) ->
+            "#{start_loc} → #{end_address.name}, #{end_address.city}"
+          _ ->
+            "#{start_loc} → Unknown Location"
+        end
+      {nil, address} when not is_nil(address) ->
+        start_loc = "#{address.name}, #{address.city}"
+        case {drive.end_geofence, drive.end_address} do
+          {end_geofence, end_address} when not is_nil(end_geofence) and not is_nil(end_address) ->
+            "#{start_loc} → #{end_geofence.name} (#{end_address.name})"
+          {nil, end_address} when not is_nil(end_address) ->
+            "#{start_loc} → #{end_address.name}, #{end_address.city}"
+          _ ->
+            "#{start_loc} → Unknown Location"
+        end
+      _ ->
+        "Unknown Route"
+    end}
+
+          🔋 Battery Information:
+      - 📊 Rated Range Change: #{TeslaMate.Email.get_range_analysis(drive.start_rated_range_km, drive.end_rated_range_km, drive.distance)}
+
+    ⚡ Power Information:
     - 🔋 Max Power: #{drive.power_max} kW
     - 🔋 Min Power: #{drive.power_min} kW
 
     📏 Odometer Information:
-    - 🏁 Start Odometer: #{Float.round(drive.start_km, 3)} km
-    - 🎯 End Odometer: #{Float.round(drive.end_km, 3)} km
+    - 📏 Odometer Change: #{Float.round(drive.start_km, 3)} → #{Float.round(drive.end_km, 3)} km
 
     🏔️ Elevation Information:
     - 📈 Total Ascent: #{drive.ascent} m
-    - 📉 Total Descent: #{drive.descent} m
-
-    📍 Route Information:
-    - 🏁 Start: #{if drive.start_geofence, do: drive.start_geofence.name, else: "#{drive.start_address.name}, #{drive.start_address.city}"}
-    - 🎯 End: #{if drive.end_geofence, do: drive.end_geofence.name, else: "#{drive.end_address.name}, #{drive.end_address.city}"}
-
-    🔋 Battery Information:
-    - 📊 Start Rated Range: #{drive.start_rated_range_km} km
-    - 📊 End Rated Range: #{drive.end_rated_range_km} km
-    - ⚡ Energy Consumption: #{if drive.energy_consumption_wh_per_km, do: "#{drive.energy_consumption_wh_per_km}", else: "N/A"} Wh/km
-    - 🔋 Energy Used: #{if drive.energy_used_kwh, do: "#{drive.energy_used_kwh}", else: "N/A"} kWh
-    - 📊 Estimated Range: #{TeslaMate.Email.get_latest_range(drive.car_id)} km
-
-    🌡️ Environment Information:
-    - 🌡️ Avg Outside Temp: #{drive.outside_temp_avg}°C
-    - 🌡️ Avg Inside Temp: #{drive.inside_temp_avg}°C
-
-    ⏰ Time Information:
-    - 🕐 Start Time: #{TeslaMate.Email.format_datetime_local(drive.start_date)}
-    - 🕙 End Time: #{TeslaMate.Email.format_datetime_local(drive.end_date)}
+    - 📉 Total Descent: #{drive.descent} m#{map_generation_text}
 
     ---
     This email was automatically sent by TeslaMate

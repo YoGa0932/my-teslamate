@@ -359,8 +359,9 @@ defmodule TeslaMate.Log do
              |> Drive.changeset(attrs)
              |> Repo.update() do
           {:ok, updated_drive} ->
-            # Send drive record email notification
+            # Send drive record email with trajectory (if available)
             Task.start(fn -> TeslaMate.Email.send_drive_notification(updated_drive) end)
+            
             {:ok, updated_drive}
           error -> error
         end
@@ -488,6 +489,7 @@ defmodule TeslaMate.Log do
       |> Repo.one() || %{end_date: DateTime.utc_now(), charge_energy_added: nil}
 
     charge_energy_used = calculate_energy_used(charging_process)
+    charge_energy_added = stats.charge_energy_added
 
     attrs =
       stats
@@ -498,7 +500,7 @@ defmodule TeslaMate.Log do
           true -> kwh
         end
       end)
-      |> put_cost(charging_process)
+      |> Map.put(:cost, calculate_charging_cost(charging_process, charge_energy_added))
 
     with {:ok, cproc} <- charging_process |> ChargingProcess.changeset(attrs) |> Repo.update(),
          {:ok, _car} <- recalculate_efficiency(charging_process.car, settings) do
@@ -537,13 +539,65 @@ defmodule TeslaMate.Log do
                 c.date - (lag(c.date) |> over(order_by: c.date))
               ) / 3600
         },
-        where: c.charging_process_id == ^id
+        where: c.charging_process_id == ^id and c.charger_power > 0
 
-    Repo.one(
-      from e in subquery(query),
-        select: sum(e.energy_used) |> type(:decimal),
-        where: e.energy_used >= 0
-    )
+    case Repo.all(query) do
+      [] -> nil
+      energy_used_list ->
+        energy_used_list
+        |> Enum.map(& &1.energy_used)
+        |> Enum.reject(&is_nil/1)
+        |> Enum.sum()
+        |> Decimal.new()
+    end
+  end
+
+  def determine_charging_type(%ChargingProcess{id: id}) do
+    query =
+      from c in Charge,
+        select: %{
+          charge_type: fragment("""
+            CASE 
+              WHEN fast_charger_present = true THEN 'DC'
+              WHEN NULLIF(mode() WITHIN GROUP (ORDER BY charger_phases),0) is null THEN 'DC'
+              ELSE 'AC'
+            END
+          """)
+        },
+        where: c.charging_process_id == ^id and c.charger_power > 0
+
+    case Repo.one(query) do
+      %{charge_type: charge_type} -> charge_type
+      _ -> "Unknown"
+    end
+  end
+
+  defp calculate_charging_cost(%ChargingProcess{} = charging_process, charge_energy_added) do
+    if is_nil(charge_energy_added) or Decimal.equal?(charge_energy_added, Decimal.new("0")) do
+      nil
+    else
+      # Price priority: Geofence time-based price > Global default time-based price > Geofence fixed price > No price
+      price_per_kwh = case charging_process.geofence do
+        %{id: geofence_id} when not is_nil(geofence_id) ->
+          # Use geofence fixed price
+          case charging_process.geofence do
+            %{cost_per_unit: cost} when not is_nil(cost) ->
+              if Decimal.equal?(cost, Decimal.new("0")), do: nil, else: cost
+            _ ->
+              nil
+          end
+        _ ->
+          nil
+      end
+      
+
+      
+      if Decimal.equal?(price_per_kwh, Decimal.new("0")) do
+        nil
+      else
+        Decimal.mult(charge_energy_added, price_per_kwh)
+      end
+    end
   end
 
   defp determine_phases(%ChargingProcess{id: id, car_id: car_id}) do
@@ -585,55 +639,7 @@ defmodule TeslaMate.Log do
     end
   end
 
-  defp put_cost(stats, %ChargingProcess{} = charging_process) do
-    alias ChargingProcess, as: CP
 
-    cost =
-      case {stats, charging_process} do
-        {%{fast_charger_type: "Tesla" <> _},
-         %CP{car: %Car{settings: %CarSettings{free_supercharging: true}}}} ->
-          0.0
-
-        {%{charge_energy_used: kwh_used, charge_energy_added: kwh_added},
-         %CP{
-           geofence: %GeoFence{
-             billing_type: :per_kwh,
-             cost_per_unit: cost_per_kwh,
-             session_fee: session_fee
-           }
-         }} ->
-          if match?(%Decimal{}, kwh_used) or match?(%Decimal{}, kwh_added) do
-            cost =
-              with %Decimal{} <- cost_per_kwh do
-                [kwh_added, kwh_used]
-                |> Enum.reject(&is_nil/1)
-                |> Enum.max(Decimal)
-                |> Decimal.mult(cost_per_kwh)
-              end
-
-            if match?(%Decimal{}, cost) or match?(%Decimal{}, session_fee) do
-              Decimal.add(session_fee || 0, cost || 0)
-            end
-          end
-
-        {%{duration_min: minutes},
-         %CP{
-           geofence: %GeoFence{
-             billing_type: :per_minute,
-             cost_per_unit: cost_per_minute,
-             session_fee: session_fee
-           }
-         }}
-        when is_number(minutes) ->
-          cost = Decimal.mult(minutes, cost_per_minute)
-          Decimal.add(session_fee || 0, cost)
-
-        {_, _} ->
-          nil
-      end
-
-    Map.put(stats, :cost, cost)
-  end
 
   defp recalculate_efficiency(car, settings, opts \\ [{5, 8}, {4, 5}, {3, 3}, {2, 2}])
   defp recalculate_efficiency(car, _settings, []), do: {:ok, car}
@@ -713,5 +719,59 @@ defmodule TeslaMate.Log do
     %Update{car_id: id}
     |> Update.changeset(%{start_date: date, end_date: date, version: version})
     |> Repo.insert()
+  end
+
+  def calculate_drive_cost(%Drive{} = drive) do
+    # Calculate energy used for driving (from range change)
+    energy_used_kwh = case {drive.start_rated_range_km, drive.end_rated_range_km, drive.car} do
+      {start_range, end_range, %{efficiency: efficiency}} when not is_nil(start_range) and not is_nil(end_range) and not is_nil(efficiency) ->
+        range_diff = Decimal.to_float(start_range) - Decimal.to_float(end_range)
+        if range_diff > 0, do: range_diff * efficiency, else: nil
+      _ ->
+        nil
+    end
+    
+    if is_nil(energy_used_kwh) or energy_used_kwh <= 0 do
+      nil
+    else
+      # Get last charging price information
+      last_charging_cost_per_kwh = get_last_charging_cost_per_kwh(drive.car_id)
+      
+      if is_nil(last_charging_cost_per_kwh) do
+        nil
+      else
+        Decimal.mult(Decimal.new(energy_used_kwh), last_charging_cost_per_kwh)
+      end
+    end
+  end
+
+  defp get_last_charging_cost_per_kwh(car_id) do
+    # Get last charging price information
+    query = """
+    SELECT 
+      cp.cost,
+      cp.charge_energy_added,
+      CASE WHEN NULLIF(mode() WITHIN GROUP (ORDER BY c.charger_phases),0) is null THEN 'DC' ELSE 'AC' END AS charge_type
+    FROM charging_processes cp
+    LEFT JOIN charges c ON cp.id = c.charging_process_id
+    WHERE cp.car_id = $1 
+      AND cp.cost IS NOT NULL 
+      AND cp.charge_energy_added IS NOT NULL 
+      AND cp.charge_energy_added > 0
+    GROUP BY cp.id, cp.cost, cp.charge_energy_added
+    ORDER BY cp.end_date DESC
+    LIMIT 1
+    """
+    
+    case Repo.query(query, [car_id]) do
+      {:ok, %{rows: [[cost, charge_energy_added, _charge_type] | _]}} ->
+        if Decimal.equal?(charge_energy_added, Decimal.new("0")) do
+          nil
+        else
+          Decimal.div(cost, charge_energy_added)
+        end
+      _ ->
+        nil
+    end
   end
 end

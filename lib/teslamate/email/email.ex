@@ -55,17 +55,39 @@ defmodule TeslaMate.Email do
         drive = TeslaMate.Repo.preload(drive_with_calculations, [:car, :start_address, :end_address, :start_geofence, :end_geofence])
 
         # Generate drive subject with location and stats
-        start_location = if drive.start_geofence, do: drive.start_geofence.name, else: drive.start_address.name
-        end_location = if drive.end_geofence, do: drive.end_geofence.name, else: drive.end_address.name
+        start_location = case {drive.start_geofence, drive.start_address} do
+          {geofence, address} when not is_nil(geofence) and not is_nil(address) ->
+            "#{geofence.name} (#{address.name})"
+          {nil, address} when not is_nil(address) ->
+            address.name
+          _ ->
+            "Unknown Location"
+        end
+        
+        end_location = case {drive.end_geofence, drive.end_address} do
+          {geofence, address} when not is_nil(geofence) and not is_nil(address) ->
+            "#{geofence.name} (#{address.name})"
+          {nil, address} when not is_nil(address) ->
+            address.name
+          _ ->
+            "Unknown Location"
+        end
+        
         drive_time = TeslaMate.Email.format_datetime_local(drive.start_date)
         drive_subject = "🚗 [#{drive_time}] #{start_location} → #{end_location} (#{Float.round(drive.distance, 1)}km, #{drive.duration_min}min)"
+        
+        # Get map generation info from Python service
+        map_info = case call_map_service(drive.id) do
+          {:ok, base64_image, map_info} -> Map.put(map_info, :image_base64, base64_image)
+          _ -> nil
+        end
         
         email = %Swoosh.Email{
           from: {System.get_env("EMAIL_FROM_NAME", "TeslaMate"), System.get_env("SMTP_USERNAME")},
           to: [{"User", email_address}],
           subject: drive_subject,
-          html_body: TeslaMate.Email.Templates.DriveEmail.generate_html(drive),
-          text_body: TeslaMate.Email.Templates.DriveEmail.generate_text(drive)
+          html_body: TeslaMate.Email.Templates.DriveEmail.generate_html(drive, map_info),
+          text_body: TeslaMate.Email.Templates.DriveEmail.generate_text(drive, map_info)
         }
 
         smtp_config = get_smtp_config()
@@ -109,18 +131,28 @@ defmodule TeslaMate.Email do
       email_address ->
         Logger.info("Attempting to send charging notification email to: #{email_address}", car_id: charging_process.car_id, charging_process_id: charging_process.id)
         # Calculate power_avg and add it to the charging_process struct
-        charging_with_power_avg = case charging_process.duration_min do
-          duration when duration > 0 -> 
-            power_avg = charging_process.charge_energy_added / (duration / 60.0)
-            Map.put(charging_process, :power_avg, power_avg)
+        charging_with_power_avg = case {charging_process.charge_energy_added, charging_process.duration_min} do
+          {charge_energy_added, duration} when not is_nil(charge_energy_added) and not is_nil(duration) and duration > 0 -> 
+            try do
+              power_avg = charge_energy_added / (duration / 60.0)
+              Map.put(charging_process, :power_avg, power_avg)
+            rescue
+              ArithmeticError ->
+                Logger.warning("Failed to calculate power_avg due to arithmetic error", 
+                              charge_energy_added: charge_energy_added, duration: duration)
+                Map.put(charging_process, :power_avg, nil)
+            end
           _ -> 
+            Logger.warning("Cannot calculate power_avg: missing or invalid data", 
+                          charge_energy_added: charging_process.charge_energy_added, 
+                          duration: charging_process.duration_min)
             Map.put(charging_process, :power_avg, nil)
         end
         
         charging_process = TeslaMate.Repo.preload(charging_with_power_avg, [:car, :address, :geofence])
 
         # Generate charging subject with location and stats
-        charging_location = if charging_process.geofence, do: charging_process.geofence.name, else: charging_process.address.name
+        charging_location = if charging_process.geofence, do: "#{charging_process.geofence.name} (#{charging_process.address.name})", else: charging_process.address.name
         charging_time = TeslaMate.Email.format_datetime_local(charging_process.start_date)
         charging_subject = "🔋 [#{charging_time}] #{charging_location} (#{Float.round(charging_process.charge_energy_added, 1)}kWh, #{charging_process.duration_min}min)"
         
@@ -221,37 +253,16 @@ defmodule TeslaMate.Email do
       uptime: get_uptime(),
       memory: get_memory_info(),
       database_status: check_database_status(),
+      settings: get_settings_info(),
       latest_drive: get_latest_drive(),
       latest_charging: get_latest_charging()
     }
   end
 
   defp get_latest_drive() do
+    # 先获取最新的驾驶记录
     query = """
-    SELECT 
-      d.*,
-      CASE 
-        WHEN d.duration_min > 0 THEN d.distance / (d.duration_min / 60.0)
-        ELSE NULL 
-      END as avg_speed,
-      CASE 
-        WHEN d.start_rated_range_km IS NOT NULL AND d.end_rated_range_km IS NOT NULL AND d.distance IS NOT NULL AND c.efficiency IS NOT NULL THEN
-          CASE 
-            WHEN (d.start_rated_range_km - d.end_rated_range_km) > 0 THEN 
-              (d.start_rated_range_km - d.end_rated_range_km) * c.efficiency * 1000 / d.distance
-            ELSE 0 
-          END
-        ELSE NULL 
-      END as energy_consumption_wh_per_km,
-      CASE 
-        WHEN d.start_rated_range_km IS NOT NULL AND d.end_rated_range_km IS NOT NULL AND c.efficiency IS NOT NULL THEN
-          CASE 
-            WHEN (d.start_rated_range_km - d.end_rated_range_km) > 0 THEN 
-              (d.start_rated_range_km - d.end_rated_range_km) * c.efficiency
-            ELSE 0 
-          END
-        ELSE NULL 
-      END as energy_used_kwh
+    SELECT d.*, c.efficiency
     FROM drives d
     JOIN cars c ON c.id = d.car_id
     ORDER BY d.end_date DESC
@@ -260,45 +271,159 @@ defmodule TeslaMate.Email do
     
     case Repo.query(query) do
       {:ok, %{rows: [row]}} ->
-        # Convert row to struct with calculated fields
-        # Get the actual column names from the query result
+        # 转换行数据为结构体
         columns = ["id", "car_id", "start_date", "end_date", "outside_temp_avg", "inside_temp_avg", 
                    "speed_max", "power_max", "power_min", "start_ideal_range_km", "end_ideal_range_km",
                    "start_rated_range_km", "end_rated_range_km", "start_km", "end_km", "distance", 
                    "duration_min", "ascent", "descent", "start_position_id", "end_position_id",
-                   "start_address_id", "end_address_id", "start_geofence_id", "end_geofence_id", "avg_speed",
-                   "energy_consumption_wh_per_km", "energy_used_kwh"]
+                   "start_address_id", "end_address_id", "start_geofence_id", "end_geofence_id", "efficiency"]
         
         drive_data = Enum.zip_with(columns, row, fn field, value -> 
-          case field do
-            field_name when field_name in ["avg_speed", "energy_consumption_wh_per_km", "energy_used_kwh"] -> 
-              case value do
-                %Decimal{} -> {String.to_atom(field), Float.round(Decimal.to_float(value), 1)}
-                value when is_number(value) -> {String.to_atom(field), Float.round(value, 1)}
-                _ -> {String.to_atom(field), nil}
-              end
-            _ -> {String.to_atom(field), value}
-          end
+          {String.to_atom(field), value}
         end) |> Map.new()
         
-
+        # 在应用层进行复杂计算
+        drive_with_calculations = calculate_drive_metrics(drive_data)
         
-        # Preload associations
+        # 预加载关联数据
         drive_id = drive_data.id
         Drive
         |> where(id: ^drive_id)
         |> Repo.one()
         |> case do
-          nil -> nil
+          nil -> 
+            Logger.warning("Latest drive record not found in database", drive_id: drive_id)
+            nil
           drive -> 
-                    drive
-        |> Repo.preload([:car, :start_address, :end_address, :start_geofence, :end_geofence])
-        |> Map.put(:avg_speed, drive_data.avg_speed)
-        |> Map.put(:energy_consumption_wh_per_km, drive_data.energy_consumption_wh_per_km)
-        |> Map.put(:energy_used_kwh, drive_data.energy_used_kwh)
+            drive
+            |> Repo.preload([:car, :start_address, :end_address, :start_geofence, :end_geofence])
+            |> Map.put(:avg_speed, drive_with_calculations.avg_speed)
+            |> Map.put(:energy_consumption_wh_per_km, drive_with_calculations.energy_consumption_wh_per_km)
+            |> Map.put(:energy_used_kwh, drive_with_calculations.energy_used_kwh)
         end
         
-      _ -> nil
+      {:error, reason} ->
+        Logger.error("Failed to query latest drive record", error: reason)
+        nil
+        
+      _ -> 
+        Logger.info("No drive records found")
+        nil
+    end
+  end
+
+  defp calculate_drive_metrics(drive_data) do
+    # 计算平均速度
+    avg_speed = case {drive_data.distance, drive_data.duration_min} do
+      {distance, duration} when not is_nil(distance) and not is_nil(duration) and duration > 0 ->
+        Float.round(distance / (duration / 60.0), 1)
+      _ ->
+        Logger.warning("Cannot calculate avg_speed: missing distance or duration", 
+                      distance: drive_data.distance, duration: drive_data.duration_min)
+        nil
+    end
+
+    # 计算能量消耗
+    {energy_consumption, energy_used} = case {drive_data.start_rated_range_km, drive_data.end_rated_range_km, 
+                                              drive_data.distance, drive_data.efficiency} do
+      {start_range, end_range, distance, efficiency} 
+        when not is_nil(start_range) and not is_nil(end_range) and not is_nil(distance) and not is_nil(efficiency) ->
+        range_diff = Decimal.to_float(start_range) - Decimal.to_float(end_range)
+        if range_diff > 0 do
+          energy_consumption = range_diff * efficiency * 1000 / distance
+          energy_used = range_diff * efficiency
+          {Float.round(energy_consumption, 1), Float.round(energy_used, 3)}
+        else
+          Logger.warning("Range change is not positive, cannot calculate energy consumption", 
+                        start_range: start_range, end_range: end_range)
+          {nil, nil}
+        end
+      _ ->
+        Logger.warning("Cannot calculate energy consumption: missing required data", 
+                      start_range: drive_data.start_rated_range_km, 
+                      end_range: drive_data.end_rated_range_km,
+                      distance: drive_data.distance, 
+                      efficiency: drive_data.efficiency)
+        {nil, nil}
+    end
+
+    %{
+      avg_speed: avg_speed,
+      energy_consumption_wh_per_km: energy_consumption,
+      energy_used_kwh: energy_used
+    }
+  end
+
+  def get_range_analysis(start_rated_range, end_rated_range, actual_distance) do
+    cond do
+      is_nil(start_rated_range) or is_nil(end_rated_range) or is_nil(actual_distance) ->
+        "N/A"
+      true ->
+        range_change = Decimal.to_float(start_rated_range) - Decimal.to_float(end_rated_range)
+        actual_distance_float = actual_distance
+        
+        cond do
+          range_change > actual_distance_float ->
+            difference = range_change - actual_distance_float
+            percentage = (difference / actual_distance_float) * 100
+            "Reduced #{Float.round(range_change, 1)}km (Higher than actual distance #{Float.round(difference, 1)}km, +#{Float.round(percentage, 1)}%)"
+          range_change < actual_distance_float ->
+            difference = actual_distance_float - range_change
+            percentage = (difference / actual_distance_float) * 100
+            "Reduced #{Float.round(range_change, 1)}km (Lower than actual distance #{Float.round(difference, 1)}km, -#{Float.round(percentage, 1)}%)"
+          true ->
+            "Reduced #{Float.round(range_change, 1)}km (Matches actual distance)"
+        end
+    end
+  end
+
+  defp get_settings_info() do
+    query = """
+    SELECT 
+      unit_of_length,
+      unit_of_temperature,
+      preferred_range,
+      base_url,
+      grafana_url,
+      language,
+      unit_of_pressure,
+      COALESCE(morning_peak_price, 0.0) as morning_peak_price,
+      COALESCE(normal_price, 0.0) as normal_price,
+      COALESCE(evening_peak_price, 0.0) as evening_peak_price,
+      COALESCE(valley_price, 0.0) as valley_price
+    FROM settings 
+    WHERE id = 1
+    """
+    
+    case Repo.query(query) do
+      {:ok, %{rows: [[unit_of_length, unit_of_temperature, preferred_range, base_url, grafana_url, language, unit_of_pressure, morning_peak_price, normal_price, evening_peak_price, valley_price] | _]}} ->
+        %{
+          unit_of_length: unit_of_length,
+          unit_of_temperature: unit_of_temperature,
+          preferred_range: preferred_range,
+          base_url: base_url,
+          grafana_url: grafana_url,
+          language: language,
+          unit_of_pressure: unit_of_pressure,
+          morning_peak_price: morning_peak_price,
+          normal_price: normal_price,
+          evening_peak_price: evening_peak_price,
+          valley_price: valley_price
+        }
+      _ ->
+        %{
+          unit_of_length: "km",
+          unit_of_temperature: "C",
+          preferred_range: "rated",
+          base_url: "N/A",
+          grafana_url: "N/A",
+          language: "en",
+          unit_of_pressure: "bar",
+          morning_peak_price: 0.0,
+          normal_price: 0.0,
+          evening_peak_price: 0.0,
+          valley_price: 0.0
+        }
     end
   end
 
@@ -489,6 +614,59 @@ defmodule TeslaMate.Email do
       _ ->
         nil
     end
+  end
+
+  @doc """
+  调用地图服务生成驾驶轨迹地图
+  """
+  def call_map_service(drive_id) do
+    service_url = case System.get_env("MAP_SERVICE_URL") do
+      nil -> 
+        Logger.warning("MAP_SERVICE_URL not configured, map generation will be skipped", drive_id: drive_id)
+        nil
+      url when is_binary(url) and byte_size(url) > 0 -> 
+        url
+      _ ->
+        Logger.error("MAP_SERVICE_URL is empty or invalid", drive_id: drive_id)
+        nil
+    end
+    
+    if is_nil(service_url) do
+      {:error, "Map service not configured"}
+    else
+      case Finch.build(:post, "#{service_url}/generate_map", 
+           [{"Content-Type", "application/json"}], 
+           Jason.encode!(%{drive_id: drive_id}))
+           |> Finch.request(TeslaMate.Finch, timeout: 30000) do
+        
+        {:ok, %Finch.Response{status: 200, body: body}} ->
+          case Jason.decode(body) do
+            {:ok, %{"success" => true, "image_base64" => image_base64, "drive_id" => ^drive_id} = map_info} ->
+              Logger.info("地图生成成功", drive_id: drive_id)
+              {:ok, image_base64, map_info}
+            
+            {:ok, %{"success" => false, "error" => error}} ->
+              Logger.warning("地图服务返回错误", drive_id: drive_id, error: error)
+              {:error, error}
+            
+            _ ->
+              Logger.error("解析地图服务响应失败", drive_id: drive_id)
+              {:error, "解析响应失败"}
+          end
+        
+        {:ok, %Finch.Response{status: status_code, body: body}} ->
+          Logger.error("地图服务HTTP错误", status_code: status_code, body: body)
+          {:error, "HTTP #{status_code}"}
+        
+        {:error, reason} ->
+          Logger.error("地图服务连接失败", drive_id: drive_id, error: reason)
+          {:error, "连接失败"}
+      end
+    end
+  rescue
+    e ->
+      Logger.error("地图服务调用失败", drive_id: drive_id, error: inspect(e))
+      {:error, "服务调用失败"}
   end
 
 end 

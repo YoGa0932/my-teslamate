@@ -55,12 +55,28 @@ defmodule TeslaMate.Email.Templates.ChargingEmail do
                 <div class="value">#{charging_process.duration_min} minutes</div>
               </div>
               <div class="stat-box">
-                <div class="label">💰 Cost</div>
-                <div class="value">#{if charging_process.cost, do: "#{charging_process.cost} 元", else: "Not available"}</div>
+                <div class="label">🔌 Charging Type</div>
+                <div class="value">#{TeslaMate.Log.determine_charging_type(charging_process)}</div>
+              </div>
+              <div class="stat-box">
+                <div class="label">💰 Total Cost</div>
+                <div class="value">#{if charging_process.cost, do: "¥#{charging_process.cost}", else: "Not available"}</div>
+              </div>
+              <div class="stat-box">
+                              <div class="label">💵 Price per kWh</div>
+              <div class="value">#{if charging_process.cost_per_kwh, do: "¥#{charging_process.cost_per_kwh}/kWh", else: "N/A"}</div>
               </div>
               <div class="stat-box">
                 <div class="label">⚡ Avg Power</div>
-                <div class="value">#{Float.round(charging_process.power_avg, 1)} kW</div>
+                <div class="value">#{if charging_process.power_avg, do: "#{Float.round(charging_process.power_avg, 1)} kW", else: "N/A"}</div>
+              </div>
+              <div class="stat-box">
+                <div class="label">⚡ Energy Used (Grid)</div>
+                <div class="value">#{if charging_process.charge_energy_used, do: "#{charging_process.charge_energy_used} kWh", else: "N/A"}</div>
+              </div>
+              <div class="stat-box">
+                <div class="label">📊 Efficiency</div>
+                <div class="value">#{if charging_process.charge_energy_used and charging_process.charge_energy_added and not Decimal.equal?(charging_process.charge_energy_used, Decimal.new("0")), do: try do "#{Float.round(Decimal.to_float(Decimal.div(charging_process.charge_energy_added, charging_process.charge_energy_used)) * 100, 1)}%" rescue _ -> "N/A" end, else: "N/A"}</div>
               </div>
             </div>
           </div>
@@ -69,20 +85,12 @@ defmodule TeslaMate.Email.Templates.ChargingEmail do
             <h3>🔋 Battery Information</h3>
             <div class="info-grid">
               <div class="info-row">
-                <div class="label">🔋 Start Battery Level</div>
-                <div class="value">#{charging_process.start_battery_level}%</div>
+                <div class="label">🔋 Battery Level Change</div>
+                <div class="value">#{charging_process.start_battery_level}% → #{charging_process.end_battery_level}%</div>
               </div>
               <div class="info-row">
-                <div class="label">🔋 End Battery Level</div>
-                <div class="value">#{charging_process.end_battery_level}%</div>
-              </div>
-              <div class="info-row">
-                <div class="label">📊 Start Rated Range</div>
-                <div class="value">#{charging_process.start_rated_range_km} km</div>
-              </div>
-              <div class="info-row">
-                <div class="label">📊 End Rated Range</div>
-                <div class="value">#{charging_process.end_rated_range_km} km</div>
+                <div class="label">📊 Rated Range Change</div>
+                <div class="value">#{charging_process.start_rated_range_km} → #{charging_process.end_rated_range_km} km</div>
               </div>
             </div>
           </div>
@@ -92,7 +100,7 @@ defmodule TeslaMate.Email.Templates.ChargingEmail do
             <div class="info-grid">
               <div class="info-row">
                 <div class="label">🏁 Charging Location</div>
-                <div class="value">#{if charging_process.geofence, do: charging_process.geofence.name, else: "#{charging_process.address.name}, #{charging_process.address.city}"}</div>
+                <div class="value">#{if charging_process.geofence, do: "#{charging_process.geofence.name} (#{charging_process.address.name})", else: "#{charging_process.address.name}, #{charging_process.address.city}"}</div>
               </div>
             </div>
           </div>
@@ -111,12 +119,8 @@ defmodule TeslaMate.Email.Templates.ChargingEmail do
             <h3>⏰ Time Information</h3>
             <div class="info-grid">
               <div class="info-row">
-                <div class="label">🕐 Start Time</div>
-                <div class="value">#{TeslaMate.Email.format_datetime_local(charging_process.start_date)}</div>
-              </div>
-              <div class="info-row">
-                <div class="label">🕙 End Time</div>
-                <div class="value">#{TeslaMate.Email.format_datetime_local(charging_process.end_date)}</div>
+                <div class="label">⏰ Time Period</div>
+                <div class="value">#{TeslaMate.Email.format_datetime_local(charging_process.start_date)} - #{TeslaMate.Email.format_datetime_local(charging_process.end_date)} (Duration: #{charging_process.duration_min} minutes)</div>
               </div>
             </div>
           </div>
@@ -139,24 +143,25 @@ defmodule TeslaMate.Email.Templates.ChargingEmail do
     📊 Charging Statistics:
     - ⚡ Energy Added: #{charging_process.charge_energy_added} kWh
     - ⏱️ Duration: #{charging_process.duration_min} minutes
-    - 💰 Cost: #{if charging_process.cost, do: "#{charging_process.cost} 元", else: "Not available"}
-    - ⚡ Avg Power: #{Float.round(charging_process.power_avg, 1)} kW
+    - 🔌 Charging Type: #{TeslaMate.Log.determine_charging_type(charging_process)}
+    - 💰 Total Cost: #{if charging_process.cost, do: "¥#{charging_process.cost}", else: "Not available"}
+          - 💵 Price per kWh: #{if charging_process.cost_per_kwh, do: "¥#{charging_process.cost_per_kwh}/kWh", else: "N/A"}
+    - ⚡ Avg Power: #{if charging_process.power_avg, do: "#{Float.round(charging_process.power_avg, 1)} kW", else: "N/A"}
+    - ⚡ Energy Used (Grid): #{if charging_process.charge_energy_used, do: "#{charging_process.charge_energy_used} kWh", else: "N/A"}
+    - 📊 Efficiency: #{if charging_process.charge_energy_used and charging_process.charge_energy_added and not Decimal.equal?(charging_process.charge_energy_used, Decimal.new("0")), do: try do "#{Float.round(Decimal.to_float(Decimal.div(charging_process.charge_energy_added, charging_process.charge_energy_used)) * 100, 1)}%" rescue _ -> "N/A" end, else: "N/A"}
 
     🔋 Battery Information:
-    - 🔋 Start Battery Level: #{charging_process.start_battery_level}%
-    - 🔋 End Battery Level: #{charging_process.end_battery_level}%
-    - 📊 Start Rated Range: #{charging_process.start_rated_range_km} km
-    - 📈 End Rated Range: #{charging_process.end_rated_range_km} km
+    - 🔋 Battery Level Change: #{charging_process.start_battery_level}% → #{charging_process.end_battery_level}%
+    - 📊 Rated Range Change: #{charging_process.start_rated_range_km} → #{charging_process.end_rated_range_km} km
 
     📍 Charging Location:
-    - 🏁 Charging Location: #{if charging_process.geofence, do: charging_process.geofence.name, else: "#{charging_process.address.name}, #{charging_process.address.city}"}
+    - 🏁 Charging Location: #{if charging_process.geofence, do: "#{charging_process.geofence.name} (#{charging_process.address.name})", else: "#{charging_process.address.name}, #{charging_process.address.city}"}
 
     🌡️ Environment Information:
     - 🌡️ Avg Outside Temp: #{charging_process.outside_temp_avg}°C
 
-    ⏰ Time Information:
-    - 🕐 Start Time: #{TeslaMate.Email.format_datetime_local(charging_process.start_date)}
-    - 🕙 End Time: #{TeslaMate.Email.format_datetime_local(charging_process.end_date)}
+          ⏰ Time Information:
+      - 🕐 Start Time: #{TeslaMate.Email.format_datetime_local(charging_process.start_date)} - 🕙 End Time: #{TeslaMate.Email.format_datetime_local(charging_process.end_date)} (Duration: #{charging_process.duration_min} minutes)
 
     ---
     This email was automatically sent by TeslaMate
