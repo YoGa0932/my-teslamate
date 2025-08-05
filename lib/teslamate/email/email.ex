@@ -35,12 +35,20 @@ defmodule TeslaMate.Email do
               {start_range, end_range, distance, efficiency} when not is_nil(start_range) and not is_nil(end_range) and not is_nil(distance) and not is_nil(efficiency) ->
                 range_diff = (if is_struct(start_range, Decimal), do: Decimal.to_float(start_range), else: start_range) - 
                              (if is_struct(end_range, Decimal), do: Decimal.to_float(end_range), else: end_range)
-                energy_consumption = if range_diff > 0, do: range_diff * efficiency * 1000 / distance, else: 0
-                energy_used = if range_diff > 0, do: range_diff * efficiency, else: 0
+                
+                {energy_consumption, energy_used} = if range_diff > 0 do
+                  energy_consumption = range_diff * efficiency * 1000 / distance
+                  energy_used = range_diff * efficiency
+                  {Float.round(energy_consumption, 1), Float.round(energy_used, 3)}
+                else
+                  energy_gained = abs(range_diff) * efficiency
+                  energy_consumption_gained = energy_gained * 1000 / distance
+                  {-Float.round(energy_consumption_gained, 1), -Float.round(energy_gained, 3)}
+                end
                 
                 drive_with_speed
-                |> Map.put(:energy_consumption_wh_per_km, Float.round(energy_consumption, 1))
-                |> Map.put(:energy_used_kwh, Float.round(energy_used, 3))
+                |> Map.put(:energy_consumption_wh_per_km, energy_consumption)
+                |> Map.put(:energy_used_kwh, energy_used)
               
               _ ->
                 drive_with_speed
@@ -316,7 +324,7 @@ defmodule TeslaMate.Email do
   end
 
   defp get_latest_drive() do
-    # 先获取最新的驾驶记录
+    # Get latest drive record
     query = """
     SELECT d.*, c.efficiency
     FROM drives d
@@ -327,22 +335,15 @@ defmodule TeslaMate.Email do
     
     case Repo.query(query) do
       {:ok, %{rows: [row]}} ->
-        # 转换行数据为结构体
-        columns = ["id", "car_id", "start_date", "end_date", "outside_temp_avg", "inside_temp_avg", 
-                   "speed_max", "power_max", "power_min", "start_ideal_range_km", "end_ideal_range_km",
-                   "start_rated_range_km", "end_rated_range_km", "start_km", "end_km", "distance", 
-                   "duration_min", "ascent", "descent", "start_position_id", "end_position_id",
-                   "start_address_id", "end_address_id", "start_geofence_id", "end_geofence_id", "efficiency"]
-        
-        Logger.info("Columns array - #{inspect(columns)}")
-        Logger.info("Row array - #{inspect(row)}")
+        columns = ["id", "start_date", "end_date", "outside_temp_avg", "speed_max", "power_max", "power_min", 
+                   "start_ideal_range_km", "end_ideal_range_km", "start_km", "end_km", "distance", 
+                   "duration_min", "car_id", "inside_temp_avg", "start_address_id", "end_address_id", 
+                   "start_rated_range_km", "end_rated_range_km", "start_position_id", "end_position_id",
+                   "start_geofence_id", "end_geofence_id", "ascent", "descent", "efficiency"]
         
         drive_data = Enum.zip_with(columns, row, fn field, value -> 
           {String.to_atom(field), value}
         end) |> Map.new()
-        
-        Logger.info("Raw database row data - #{inspect(row)}")
-        Logger.info("Processed drive_data - #{inspect(drive_data)}")
         
         drive_with_calculations = calculate_drive_metrics(drive_data)
         
@@ -377,7 +378,7 @@ defmodule TeslaMate.Email do
       {distance, duration} when not is_nil(distance) and not is_nil(duration) and duration > 0 ->
         Float.round(distance / (duration / 60.0), 1)
       _ ->
-        Logger.info("Cannot calculate avg_speed: missing distance or duration - distance: #{drive_data.distance}, duration: #{drive_data.duration_min}")
+
         nil
     end
 
@@ -388,22 +389,18 @@ defmodule TeslaMate.Email do
         start_range_float = if is_struct(start_range, Decimal), do: Decimal.to_float(start_range), else: start_range
         end_range_float = if is_struct(end_range, Decimal), do: Decimal.to_float(end_range), else: end_range
         range_diff = start_range_float - end_range_float
-        Logger.info("Energy calculation debug - start_range: #{start_range}, end_range: #{end_range}, range_diff: #{range_diff}, efficiency: #{efficiency}, distance: #{distance}")
-        Logger.info("Detailed energy calculation values - start_range_float: #{start_range_float}, end_range_float: #{end_range_float}, range_diff: #{range_diff}, efficiency: #{efficiency}, distance: #{distance}")
+
         if range_diff > 0 do
           energy_consumption = range_diff * efficiency * 1000 / distance
           energy_used = range_diff * efficiency
-          Logger.info("Energy calculation successful - energy_consumption: #{energy_consumption}, energy_used: #{energy_used}")
           {Float.round(energy_consumption, 1), Float.round(energy_used, 3)}
         else
           energy_gained = abs(range_diff) * efficiency
           energy_consumption_gained = energy_gained * 1000 / distance
-          Logger.info("Vehicle gained range during drive - energy_gained: #{energy_gained}, energy_consumption_gained: #{energy_consumption_gained}")
-          Logger.info("This usually happens when the vehicle gains range during the drive (e.g., downhill with regeneration)")
           {-Float.round(energy_consumption_gained, 1), -Float.round(energy_gained, 3)}
         end
       _ ->
-        Logger.info("Cannot calculate energy consumption: missing required data - start_range: #{drive_data.start_rated_range_km}, end_range: #{drive_data.end_rated_range_km}, distance: #{drive_data.distance}, efficiency: #{drive_data.efficiency}")
+
         {nil, nil}
     end
 
@@ -714,7 +711,7 @@ defmodule TeslaMate.Email do
   end
 
   @doc """
-  调用地图服务生成驾驶轨迹地图
+  Call map service to generate drive track map
   """
   def call_map_service(drive_id) do
     service_url = case System.get_env("MAP_SERVICE_URL") do
@@ -728,46 +725,44 @@ defmodule TeslaMate.Email do
         "http://localhost:5001"
     end
     
-    Logger.info("Using map service URL - service_url: #{service_url}, drive_id: #{drive_id}")
     request_body = Jason.encode!(%{drive_id: drive_id})
-    Logger.info("Map service request - drive_id: #{drive_id}, request_body: #{request_body}")
     case Finch.build(:post, "#{service_url}/generate_map", 
          [{"Content-Type", "application/json"}], 
          request_body)
          |> Finch.request(TeslaMate.HTTP, timeout: 30000) do
         
         {:ok, %Finch.Response{status: 200, body: body}} ->
-          Logger.info("Map service response received - drive_id: #{drive_id}, status: 200, body_length: #{byte_size(body)}")
+
           case Jason.decode(body) do
             {:ok, %{"success" => true, "image_base64" => image_base64, "drive_id" => ^drive_id} = map_info} ->
-              Logger.info("地图生成成功", drive_id: drive_id)
+              Logger.info("Map generated successfully", drive_id: drive_id)
               {:ok, image_base64, map_info}
             
             {:ok, %{"success" => false, "error" => error}} ->
-              Logger.info("地图服务返回错误 - drive_id: #{drive_id}, error: #{error}")
+
               {:error, error}
             
-            {:ok, response} ->
-              Logger.info("地图服务响应格式异常 - drive_id: #{drive_id}, response: #{inspect(response)}")
-              {:error, "响应格式异常"}
+            {:ok, _response} ->
+
+              {:error, "Invalid response format"}
             
-            {:error, decode_error} ->
-              Logger.info("解析地图服务响应失败 - drive_id: #{drive_id}, decode_error: #{inspect(decode_error)}, body: #{body}")
-              {:error, "解析响应失败"}
+            {:error, _decode_error} ->
+
+              {:error, "Failed to parse response"}
           end
         
-        {:ok, %Finch.Response{status: status_code, body: body}} ->
-          Logger.info("地图服务HTTP错误 - status_code: #{status_code}, body: #{body}")
+        {:ok, %Finch.Response{status: status_code, body: _body}} ->
+
           {:error, "HTTP #{status_code}"}
         
-        {:error, reason} ->
-          Logger.info("地图服务连接失败 - drive_id: #{drive_id}, error: #{inspect(reason)}")
-          {:error, "连接失败"}
+        {:error, _reason} ->
+
+          {:error, "Connection failed"}
       end
   rescue
-    e ->
-      Logger.info("地图服务调用失败 - drive_id: #{drive_id}, error: #{inspect(e)}")
-      {:error, "服务调用失败"}
+    _e ->
+
+      {:error, "Service call failed"}
   end
 
 end 

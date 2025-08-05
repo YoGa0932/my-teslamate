@@ -728,19 +728,19 @@ defmodule TeslaMate.Log do
       {start_range, end_range, %{efficiency: efficiency}} when not is_nil(start_range) and not is_nil(end_range) and not is_nil(efficiency) ->
         range_diff = (if is_struct(start_range, Decimal), do: Decimal.to_float(start_range), else: start_range) - 
                      (if is_struct(end_range, Decimal), do: Decimal.to_float(end_range), else: end_range)
-        if range_diff > 0, do: range_diff * efficiency, else: nil
+        range_diff * efficiency
       _ ->
         nil
     end
     
-    if is_nil(energy_used_kwh) or energy_used_kwh <= 0 do
+    if is_nil(energy_used_kwh) do
       nil
     else
       # Get last charging price information
       last_charging_cost_per_kwh = get_last_charging_cost_per_kwh(drive.car_id)
       
       if is_nil(last_charging_cost_per_kwh) do
-        # 如果没有充电价格信息，使用默认值1元/度电
+        # If no charging price info, use default value 1 yuan/kWh
         Decimal.mult(Decimal.new(Float.to_string(energy_used_kwh)), Decimal.new("1.0"))
         |> Decimal.to_float()
         |> Float.round(3)

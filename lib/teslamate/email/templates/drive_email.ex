@@ -66,11 +66,11 @@ defmodule TeslaMate.Email.Templates.DriveEmail do
               </div>
               <div class="stat-box">
                 <div class="label">⚡ Energy Consumption</div>
-                <div class="value">#{if drive.energy_consumption_wh_per_km, do: "#{drive.energy_consumption_wh_per_km}", else: "N/A"} Wh/km</div>
+                <div class="value">#{if drive.energy_consumption_wh_per_km, do: "#{Float.round(drive.energy_consumption_wh_per_km, 1)}", else: "N/A"} Wh/km</div>
               </div>
               <div class="stat-box">
                 <div class="label">🔋 Energy Used</div>
-                <div class="value">#{if drive.energy_used_kwh, do: "#{drive.energy_used_kwh}", else: "N/A"} kWh</div>
+                <div class="value">#{if drive.energy_used_kwh, do: "#{Float.round(drive.energy_used_kwh, 3)}", else: "N/A"} kWh</div>
               </div>
               <div class="stat-box">
                 <div class="label">📊 Estimated Range</div>
@@ -232,8 +232,8 @@ defmodule TeslaMate.Email.Templates.DriveEmail do
     - ⏱️ Duration: #{TeslaMate.Email.format_duration_minutes(drive.duration_min)}
     - 🏎️ Max Speed: #{drive.speed_max} km/h
     - 📊 Avg Speed: #{Float.round(drive.avg_speed, 1)} km/h
-    - ⚡ Energy Consumption: #{if drive.energy_consumption_wh_per_km, do: "#{drive.energy_consumption_wh_per_km}", else: "N/A"} Wh/km
-    - 🔋 Energy Used: #{if drive.energy_used_kwh, do: "#{drive.energy_used_kwh}", else: "N/A"} kWh
+    - ⚡ Energy Consumption: #{if drive.energy_consumption_wh_per_km, do: "#{Float.round(drive.energy_consumption_wh_per_km, 1)}", else: "N/A"} Wh/km
+    - 🔋 Energy Used: #{if drive.energy_used_kwh, do: "#{Float.round(drive.energy_used_kwh, 3)}", else: "N/A"} kWh
     - 📊 Estimated Range: #{TeslaMate.Email.get_latest_range(drive.car_id)} km
     - 💰 Drive Cost: #{if TeslaMate.Log.calculate_drive_cost(drive), do: "¥#{TeslaMate.Log.calculate_drive_cost(drive)}", else: "N/A"}
 
