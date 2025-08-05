@@ -167,7 +167,7 @@ defmodule TeslaMate.Email.Templates.StartupEmail do
             <div class="info-grid">
               <div class="info-row">
                 <div class="label">⏰ Time Period</div>
-                <div class="value">#{TeslaMate.Email.format_datetime_local(info.latest_drive.start_date)} - #{TeslaMate.Email.format_datetime_local(info.latest_drive.end_date)} (Duration: #{info.latest_drive.duration_min} minutes)</div>
+                <div class="value">#{TeslaMate.Email.format_datetime_local(info.latest_drive.start_date)} - #{TeslaMate.Email.format_datetime_local(info.latest_drive.end_date)} (Duration: #{TeslaMate.Email.format_duration_minutes(info.latest_drive.duration_min)})</div>
               </div>
             </div>
           </div>
@@ -234,7 +234,7 @@ defmodule TeslaMate.Email.Templates.StartupEmail do
             <div class="info-grid">
               <div class="info-row">
                 <div class="label">📏 Odometer Change</div>
-                <div class="value">#{Float.round(info.latest_drive.start_km, 3)} → #{Float.round(info.latest_drive.end_km, 3)} km</div>
+                <div class="value">#{Float.round(info.latest_drive.start_km, 3)} → #{Float.round(info.latest_drive.end_km, 3)} (+#{Float.round(info.latest_drive.end_km - info.latest_drive.start_km, 3)} km)</div>
               </div>
             </div>
           </div>

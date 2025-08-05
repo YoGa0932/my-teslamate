@@ -386,13 +386,15 @@ defmodule TeslaMate.Email do
         when not is_nil(start_range) and not is_nil(end_range) and not is_nil(distance) and not is_nil(efficiency) ->
         range_diff = (if is_struct(start_range, Decimal), do: Decimal.to_float(start_range), else: start_range) - 
                      (if is_struct(end_range, Decimal), do: Decimal.to_float(end_range), else: end_range)
+        Logger.info("Energy calculation debug", start_range: start_range, end_range: end_range, range_diff: range_diff, efficiency: efficiency, distance: distance)
         if range_diff > 0 do
           energy_consumption = range_diff * efficiency * 1000 / distance
           energy_used = range_diff * efficiency
+          Logger.info("Energy calculation successful", energy_consumption: energy_consumption, energy_used: energy_used)
           {Float.round(energy_consumption, 1), Float.round(energy_used, 3)}
         else
           Logger.warning("Range change is not positive, cannot calculate energy consumption", 
-                        start_range: start_range, end_range: end_range)
+                        start_range: start_range, end_range: end_range, range_diff: range_diff)
           {nil, nil}
         end
       _ ->
