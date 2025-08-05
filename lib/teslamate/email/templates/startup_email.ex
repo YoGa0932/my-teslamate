@@ -254,7 +254,7 @@ defmodule TeslaMate.Email.Templates.StartupEmail do
           </div>
 
           #{case TeslaMate.Email.call_map_service(info.latest_drive.id) do
-            {:ok, base64_image, map_info} ->
+            {:ok, base64_image, _map_info} ->
               """
               <div class="section trajectory-section">
                 <h3>🗺️ Drive Trajectory</h3>
@@ -488,7 +488,7 @@ defmodule TeslaMate.Email.Templates.StartupEmail do
       - ⚡ Energy Used (Grid): #{if info.latest_charging.charge_energy_used, do: "#{info.latest_charging.charge_energy_used} kWh", else: "N/A"}
       - 📊 Efficiency: #{if info.latest_charging.charge_energy_used and info.latest_charging.charge_energy_added and not Decimal.equal?(info.latest_charging.charge_energy_used, Decimal.new("0")), do: "#{Float.round(Decimal.to_float(Decimal.div(info.latest_charging.charge_energy_added, info.latest_charging.charge_energy_used)) * 100, 1)}%", else: "N/A"}
       - 💵 Price per kWh: #{if info.latest_charging.cost_per_kwh, do: "¥#{info.latest_charging.cost_per_kwh}/kWh", else: "N/A"}
-       """
+      """
      else
       """
       Latest Charging Session: No charging records found
