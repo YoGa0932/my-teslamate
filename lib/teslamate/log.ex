@@ -741,7 +741,7 @@ defmodule TeslaMate.Log do
       if is_nil(last_charging_cost_per_kwh) do
         nil
       else
-        Decimal.mult(Decimal.new(energy_used_kwh), last_charging_cost_per_kwh)
+        Decimal.mult(Decimal.new(Float.to_string(energy_used_kwh)), last_charging_cost_per_kwh)
       end
     end
   end
