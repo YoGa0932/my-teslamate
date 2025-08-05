@@ -388,6 +388,7 @@ defmodule TeslaMate.Email do
         end_range_float = if is_struct(end_range, Decimal), do: Decimal.to_float(end_range), else: end_range
         range_diff = start_range_float - end_range_float
         Logger.info("Energy calculation debug", start_range: start_range, end_range: end_range, range_diff: range_diff, efficiency: efficiency, distance: distance, start_range_type: (if is_struct(start_range, Decimal), do: "Decimal", else: "Float"), end_range_type: (if is_struct(end_range, Decimal), do: "Decimal", else: "Float"))
+        Logger.info("Detailed energy calculation values", start_range_float: start_range_float, end_range_float: end_range_float, range_diff: range_diff, efficiency: efficiency, distance: distance)
         if range_diff > 0 do
           energy_consumption = range_diff * efficiency * 1000 / distance
           energy_used = range_diff * efficiency
@@ -729,12 +730,15 @@ defmodule TeslaMate.Email do
     end
     
     Logger.info("Using map service URL", service_url: service_url, drive_id: drive_id)
+    request_body = Jason.encode!(%{drive_id: drive_id})
+    Logger.info("Map service request", drive_id: drive_id, request_body: request_body, url: "#{service_url}/generate_map")
     case Finch.build(:post, "#{service_url}/generate_map", 
          [{"Content-Type", "application/json"}], 
-         Jason.encode!(%{drive_id: drive_id}))
+         request_body)
          |> Finch.request(Finch, timeout: 30000) do
         
         {:ok, %Finch.Response{status: 200, body: body}} ->
+          Logger.info("Map service response received", drive_id: drive_id, status: 200, body_length: byte_size(body))
           case Jason.decode(body) do
             {:ok, %{"success" => true, "image_base64" => image_base64, "drive_id" => ^drive_id} = map_info} ->
               Logger.info("地图生成成功", drive_id: drive_id)
@@ -744,8 +748,12 @@ defmodule TeslaMate.Email do
               Logger.warning("地图服务返回错误", drive_id: drive_id, error: error)
               {:error, error}
             
-            _ ->
-              Logger.error("解析地图服务响应失败", drive_id: drive_id)
+            {:ok, response} ->
+              Logger.error("地图服务响应格式异常", drive_id: drive_id, response: response)
+              {:error, "响应格式异常"}
+            
+            {:error, decode_error} ->
+              Logger.error("解析地图服务响应失败", drive_id: drive_id, decode_error: decode_error, body: body)
               {:error, "解析响应失败"}
           end
         
