@@ -384,9 +384,10 @@ defmodule TeslaMate.Email do
                                               drive_data.distance, drive_data.efficiency} do
       {start_range, end_range, distance, efficiency} 
         when not is_nil(start_range) and not is_nil(end_range) and not is_nil(distance) and not is_nil(efficiency) ->
-        range_diff = (if is_struct(start_range, Decimal), do: Decimal.to_float(start_range), else: start_range) - 
-                     (if is_struct(end_range, Decimal), do: Decimal.to_float(end_range), else: end_range)
-        Logger.info("Energy calculation debug", start_range: start_range, end_range: end_range, range_diff: range_diff, efficiency: efficiency, distance: distance)
+        start_range_float = if is_struct(start_range, Decimal), do: Decimal.to_float(start_range), else: start_range
+        end_range_float = if is_struct(end_range, Decimal), do: Decimal.to_float(end_range), else: end_range
+        range_diff = start_range_float - end_range_float
+        Logger.info("Energy calculation debug", start_range: start_range, end_range: end_range, range_diff: range_diff, efficiency: efficiency, distance: distance, start_range_type: (if is_struct(start_range, Decimal), do: "Decimal", else: "Float"), end_range_type: (if is_struct(end_range, Decimal), do: "Decimal", else: "Float"))
         if range_diff > 0 do
           energy_consumption = range_diff * efficiency * 1000 / distance
           energy_used = range_diff * efficiency
@@ -540,7 +541,7 @@ defmodule TeslaMate.Email do
                   else
                     cost_per_kwh = Decimal.div(cost, energy_added)
                     cost_per_kwh_float = Decimal.to_float(cost_per_kwh) |> Float.round(2)
-                    Logger.info("Calculated cost_per_kwh", cost: cost, energy_added: energy_added, cost_per_kwh: cost_per_kwh, cost_per_kwh_float: cost_per_kwh_float)
+                    Logger.info("Calculated cost_per_kwh", cost: cost, energy_added: energy_added, cost_per_kwh: cost_per_kwh, cost_per_kwh_float: cost_per_kwh_float, cost_type: (if is_struct(cost, Decimal), do: "Decimal", else: "Float"), energy_type: (if is_struct(energy_added, Decimal), do: "Decimal", else: "Float"))
                     cost_per_kwh_float
                   end
                 rescue
