@@ -76,7 +76,7 @@ defmodule TeslaMate.Email.Templates.ChargingEmail do
               </div>
               <div class="stat-box">
                 <div class="label">📊 Efficiency</div>
-                <div class="value">#{if charging_process.charge_energy_used and charging_process.charge_energy_added and not Decimal.equal?(charging_process.charge_energy_used, Decimal.new("0")), do: try do "#{Float.round(Decimal.to_float(Decimal.div(charging_process.charge_energy_added, charging_process.charge_energy_used)) * 100, 1)}%" rescue _ -> "N/A" end, else: "N/A"}</div>
+                <div class="value">#{if charging_process.charge_energy_used and charging_process.charge_energy_added and not Decimal.equal?(charging_process.charge_energy_used, Decimal.new("0")), do: (try do Float.round(Decimal.to_float(Decimal.div(charging_process.charge_energy_added, charging_process.charge_energy_used)) * 100, 1) rescue _ -> nil end) |> (fn x -> if x, do: "#{x}%", else: "N/A" end).(), else: "N/A"}</div>
               </div>
             </div>
           </div>
@@ -148,7 +148,7 @@ defmodule TeslaMate.Email.Templates.ChargingEmail do
           - 💵 Price per kWh: #{if charging_process.cost_per_kwh, do: "¥#{charging_process.cost_per_kwh}/kWh", else: "N/A"}
     - ⚡ Avg Power: #{if charging_process.power_avg, do: "#{Float.round(charging_process.power_avg, 1)} kW", else: "N/A"}
     - ⚡ Energy Used (Grid): #{if charging_process.charge_energy_used, do: "#{charging_process.charge_energy_used} kWh", else: "N/A"}
-    - 📊 Efficiency: #{if charging_process.charge_energy_used and charging_process.charge_energy_added and not Decimal.equal?(charging_process.charge_energy_used, Decimal.new("0")), do: try do "#{Float.round(Decimal.to_float(Decimal.div(charging_process.charge_energy_added, charging_process.charge_energy_used)) * 100, 1)}%" rescue _ -> "N/A" end, else: "N/A"}
+    - 📊 Efficiency: #{if charging_process.charge_energy_used and charging_process.charge_energy_added and not Decimal.equal?(charging_process.charge_energy_used, Decimal.new("0")), do: (try do Float.round(Decimal.to_float(Decimal.div(charging_process.charge_energy_added, charging_process.charge_energy_used)) * 100, 1) rescue _ -> nil end) |> (fn x -> if x, do: "#{x}%", else: "N/A" end).(), else: "N/A"}
 
     🔋 Battery Information:
     - 🔋 Battery Level Change: #{charging_process.start_battery_level}% → #{charging_process.end_battery_level}%
