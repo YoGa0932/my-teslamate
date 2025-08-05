@@ -640,7 +640,7 @@ defmodule TeslaMate.Email do
       case Finch.build(:post, "#{service_url}/generate_map", 
            [{"Content-Type", "application/json"}], 
            Jason.encode!(%{drive_id: drive_id}))
-           |> Finch.request(TeslaMate.Finch, timeout: 30000) do
+           |> Finch.request(TeslaMate.HTTP, timeout: 30000) do
         
         {:ok, %Finch.Response{status: 200, body: body}} ->
           case Jason.decode(body) do

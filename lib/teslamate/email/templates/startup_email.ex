@@ -310,7 +310,7 @@ defmodule TeslaMate.Email.Templates.StartupEmail do
             </div>
             <div class="stat-box">
               <div class="label">📊 Efficiency</div>
-              <div class="value">#{if info.latest_charging.charge_energy_used and info.latest_charging.charge_energy_added and not Decimal.equal?(info.latest_charging.charge_energy_used, Decimal.new("0")), do: (try do Float.round(Decimal.to_float(Decimal.div(info.latest_charging.charge_energy_added, info.latest_charging.charge_energy_used)) * 100, 1) rescue _ -> nil end) |> (fn x -> if x, do: "#{x}%", else: "N/A" end).(), else: "N/A"}</div>
+              <div class="value">#{if not is_nil(info.latest_charging.charge_energy_used) and not is_nil(info.latest_charging.charge_energy_added) and not Decimal.equal?(info.latest_charging.charge_energy_used, Decimal.new("0")), do: (try do Float.round(Decimal.to_float(Decimal.div(info.latest_charging.charge_energy_added, info.latest_charging.charge_energy_used)) * 100, 1) rescue _ -> nil end) |> (fn x -> if x, do: "#{x}%", else: "N/A" end).(), else: "N/A"}</div>
             </div>
             <div class="stat-box">
               <div class="label">💵 Price per kWh</div>
@@ -486,7 +486,7 @@ defmodule TeslaMate.Email.Templates.StartupEmail do
       - 💰 Total Cost: #{if info.latest_charging.cost, do: "¥#{info.latest_charging.cost}", else: "Not available"}
       - ⚡ Avg Power: #{if info.latest_charging.power_avg, do: "#{Float.round(info.latest_charging.power_avg, 1)} kW", else: "N/A"}
       - ⚡ Energy Used (Grid): #{if info.latest_charging.charge_energy_used, do: "#{info.latest_charging.charge_energy_used} kWh", else: "N/A"}
-      - 📊 Efficiency: #{if info.latest_charging.charge_energy_used and info.latest_charging.charge_energy_added and not Decimal.equal?(info.latest_charging.charge_energy_used, Decimal.new("0")), do: (try do Float.round(Decimal.to_float(Decimal.div(info.latest_charging.charge_energy_added, info.latest_charging.charge_energy_used)) * 100, 1) rescue _ -> nil end) |> (fn x -> if x, do: "#{x}%", else: "N/A" end).(), else: "N/A"}
+      - 📊 Efficiency: #{if not is_nil(info.latest_charging.charge_energy_used) and not is_nil(info.latest_charging.charge_energy_added) and not Decimal.equal?(info.latest_charging.charge_energy_used, Decimal.new("0")), do: (try do Float.round(Decimal.to_float(Decimal.div(info.latest_charging.charge_energy_added, info.latest_charging.charge_energy_used)) * 100, 1) rescue _ -> nil end) |> (fn x -> if x, do: "#{x}%", else: "N/A" end).(), else: "N/A"}
       - 💵 Price per kWh: #{if info.latest_charging.cost_per_kwh, do: "¥#{info.latest_charging.cost_per_kwh}/kWh", else: "N/A"}
       """
      else
