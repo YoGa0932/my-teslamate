@@ -131,26 +131,77 @@ defmodule TeslaMate.Email do
 
       email_address ->
         Logger.info("Attempting to send charging notification email to: #{email_address}", car_id: charging_process.car_id, charging_process_id: charging_process.id)
-        # Calculate power_avg and add it to the charging_process struct
-        charging_with_power_avg = case {charging_process.charge_energy_added, charging_process.duration_min} do
+        # Calculate power_avg and cost_per_kwh and add them to the charging_process struct
+        charging_with_calculations = case {charging_process.charge_energy_added, charging_process.duration_min} do
           {charge_energy_added, duration} when not is_nil(charge_energy_added) and not is_nil(duration) and duration > 0 -> 
             try do
               power_avg = charge_energy_added / (duration / 60.0)
-              Map.put(charging_process, :power_avg, power_avg)
+              charging_with_power = Map.put(charging_process, :power_avg, power_avg)
+              
+              # Calculate cost_per_kwh if cost and charge_energy_added are available
+              cost_per_kwh = case {charging_process.cost, charging_process.charge_energy_added} do
+                {cost, energy_added} when not is_nil(cost) and not is_nil(energy_added) ->
+                  try do
+                    if Decimal.equal?(energy_added, Decimal.new("0")) do
+                      nil
+                    else
+                      Decimal.div(cost, energy_added) |> Decimal.to_float() |> Float.round(2)
+                    end
+                  rescue
+                    _ -> nil
+                  end
+                _ -> nil
+              end
+              
+              Map.put(charging_with_power, :cost_per_kwh, cost_per_kwh)
             rescue
               ArithmeticError ->
                 Logger.warning("Failed to calculate power_avg due to arithmetic error", 
                               charge_energy_added: charge_energy_added, duration: duration)
-                Map.put(charging_process, :power_avg, nil)
+                charging_with_power = Map.put(charging_process, :power_avg, nil)
+                
+                # Still try to calculate cost_per_kwh
+                cost_per_kwh = case {charging_process.cost, charging_process.charge_energy_added} do
+                  {cost, energy_added} when not is_nil(cost) and not is_nil(energy_added) ->
+                    try do
+                      if Decimal.equal?(energy_added, Decimal.new("0")) do
+                        nil
+                      else
+                        Decimal.div(cost, energy_added) |> Decimal.to_float() |> Float.round(2)
+                      end
+                    rescue
+                      _ -> nil
+                    end
+                  _ -> nil
+                end
+                
+                Map.put(charging_with_power, :cost_per_kwh, cost_per_kwh)
             end
           _ -> 
             Logger.warning("Cannot calculate power_avg: missing or invalid data", 
                           charge_energy_added: charging_process.charge_energy_added, 
                           duration: charging_process.duration_min)
-            Map.put(charging_process, :power_avg, nil)
+            charging_with_power = Map.put(charging_process, :power_avg, nil)
+            
+            # Still try to calculate cost_per_kwh
+            cost_per_kwh = case {charging_process.cost, charging_process.charge_energy_added} do
+              {cost, energy_added} when not is_nil(cost) and not is_nil(energy_added) ->
+                try do
+                  if Decimal.equal?(energy_added, Decimal.new("0")) do
+                    nil
+                  else
+                    Decimal.div(cost, energy_added) |> Decimal.to_float() |> Float.round(2)
+                  end
+                rescue
+                  _ -> nil
+                end
+              _ -> nil
+            end
+            
+            Map.put(charging_with_power, :cost_per_kwh, cost_per_kwh)
         end
         
-        charging_process = TeslaMate.Repo.preload(charging_with_power_avg, [:car, :address, :geofence])
+        charging_process = TeslaMate.Repo.preload(charging_with_calculations, [:car, :address, :geofence])
 
         # Generate charging subject with location and stats
         charging_location = if charging_process.geofence, do: "#{charging_process.geofence.name} (#{charging_process.address.name})", else: charging_process.address.name
@@ -473,9 +524,25 @@ defmodule TeslaMate.Email do
         |> case do
           nil -> nil
           charging -> 
+            # Calculate cost_per_kwh if cost and charge_energy_added are available
+            cost_per_kwh = case {charging_data.cost, charging_data.charge_energy_added} do
+              {cost, energy_added} when not is_nil(cost) and not is_nil(energy_added) ->
+                try do
+                  if Decimal.equal?(energy_added, Decimal.new("0")) do
+                    nil
+                  else
+                    Decimal.div(cost, energy_added) |> Decimal.to_float() |> Float.round(2)
+                  end
+                rescue
+                  _ -> nil
+                end
+              _ -> nil
+            end
+            
             charging
             |> Repo.preload([:car, :address, :geofence])
             |> Map.put(:power_avg, charging_data.power_avg)
+            |> Map.put(:cost_per_kwh, cost_per_kwh)
         end
         
       _ -> nil
