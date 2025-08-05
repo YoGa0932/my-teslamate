@@ -33,7 +33,8 @@ defmodule TeslaMate.Email do
             # Calculate energy consumption if we have the required data
             case {drive.start_rated_range_km, drive.end_rated_range_km, drive.distance, drive.car.efficiency} do
               {start_range, end_range, distance, efficiency} when not is_nil(start_range) and not is_nil(end_range) and not is_nil(distance) and not is_nil(efficiency) ->
-                range_diff = Decimal.to_float(start_range) - Decimal.to_float(end_range)
+                range_diff = (if is_struct(start_range, Decimal), do: Decimal.to_float(start_range), else: start_range) - 
+                             (if is_struct(end_range, Decimal), do: Decimal.to_float(end_range), else: end_range)
                 energy_consumption = if range_diff > 0, do: range_diff * efficiency * 1000 / distance, else: 0
                 energy_used = if range_diff > 0, do: range_diff * efficiency, else: 0
                 
@@ -328,7 +329,8 @@ defmodule TeslaMate.Email do
                                               drive_data.distance, drive_data.efficiency} do
       {start_range, end_range, distance, efficiency} 
         when not is_nil(start_range) and not is_nil(end_range) and not is_nil(distance) and not is_nil(efficiency) ->
-        range_diff = Decimal.to_float(start_range) - Decimal.to_float(end_range)
+        range_diff = (if is_struct(start_range, Decimal), do: Decimal.to_float(start_range), else: start_range) - 
+                     (if is_struct(end_range, Decimal), do: Decimal.to_float(end_range), else: end_range)
         if range_diff > 0 do
           energy_consumption = range_diff * efficiency * 1000 / distance
           energy_used = range_diff * efficiency
@@ -359,7 +361,8 @@ defmodule TeslaMate.Email do
       is_nil(start_rated_range) or is_nil(end_rated_range) or is_nil(actual_distance) ->
         "N/A"
       true ->
-        range_change = Decimal.to_float(start_rated_range) - Decimal.to_float(end_rated_range)
+        range_change = (if is_struct(start_rated_range, Decimal), do: Decimal.to_float(start_rated_range), else: start_rated_range) - 
+                       (if is_struct(end_rated_range, Decimal), do: Decimal.to_float(end_rated_range), else: end_rated_range)
         actual_distance_float = actual_distance
         
         cond do
