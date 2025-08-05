@@ -451,20 +451,37 @@ defmodule TeslaMate.Email do
     
     case Repo.query(query) do
       {:ok, %{rows: [[unit_of_length, unit_of_temperature, preferred_range, base_url, grafana_url, language, unit_of_pressure, morning_peak_price, normal_price, evening_peak_price, valley_price] | _]}} ->
+        Logger.info("Settings query successful", base_url: base_url, grafana_url: grafana_url, language: language)
         %{
-          unit_of_length: unit_of_length,
-          unit_of_temperature: unit_of_temperature,
-          preferred_range: preferred_range,
-          base_url: (if is_nil(base_url) or base_url == "", do: "N/A", else: base_url),
-          grafana_url: (if is_nil(grafana_url) or grafana_url == "", do: "N/A", else: grafana_url),
-          language: (if is_nil(language) or language == "", do: "en", else: language),
-          unit_of_pressure: unit_of_pressure,
+          unit_of_length: to_string(unit_of_length),
+          unit_of_temperature: to_string(unit_of_temperature),
+          preferred_range: to_string(preferred_range),
+          base_url: (if is_nil(base_url) or base_url == "", do: "N/A", else: to_string(base_url)),
+          grafana_url: (if is_nil(grafana_url) or grafana_url == "", do: "N/A", else: to_string(grafana_url)),
+          language: (if is_nil(language) or language == "", do: "en", else: to_string(language)),
+          unit_of_pressure: to_string(unit_of_pressure),
           morning_peak_price: morning_peak_price,
           normal_price: normal_price,
           evening_peak_price: evening_peak_price,
           valley_price: valley_price
         }
-      _ ->
+      {:ok, %{rows: []}} ->
+        Logger.warning("Settings query returned no rows")
+        %{
+          unit_of_length: "km",
+          unit_of_temperature: "C",
+          preferred_range: "rated",
+          base_url: "N/A",
+          grafana_url: "N/A",
+          language: "en",
+          unit_of_pressure: "bar",
+          morning_peak_price: 0.0,
+          normal_price: 0.0,
+          evening_peak_price: 0.0,
+          valley_price: 0.0
+        }
+      {:error, reason} ->
+        Logger.error("Settings query failed", error: reason)
         %{
           unit_of_length: "km",
           unit_of_temperature: "C",
@@ -531,10 +548,14 @@ defmodule TeslaMate.Email do
                   if Decimal.equal?(energy_added, Decimal.new("0")) do
                     nil
                   else
-                    Decimal.div(cost, energy_added) |> Decimal.to_float() |> Float.round(2)
+                    cost_per_kwh = Decimal.div(cost, energy_added)
+                    Logger.info("Calculated cost_per_kwh", cost: cost, energy_added: energy_added, cost_per_kwh: cost_per_kwh)
+                    Decimal.to_float(cost_per_kwh) |> Float.round(2)
                   end
                 rescue
-                  _ -> nil
+                  error ->
+                    Logger.error("Failed to calculate cost_per_kwh", error: error, cost: cost, energy_added: energy_added)
+                    nil
                 end
               _ -> nil
             end
@@ -721,7 +742,7 @@ defmodule TeslaMate.Email do
       case Finch.build(:post, "#{service_url}/generate_map", 
            [{"Content-Type", "application/json"}], 
            Jason.encode!(%{drive_id: drive_id}))
-           |> Finch.request(TeslaMate.HTTP, timeout: 30000) do
+           |> Finch.request(Finch, timeout: 30000) do
         
         {:ok, %Finch.Response{status: 200, body: body}} ->
           case Jason.decode(body) do

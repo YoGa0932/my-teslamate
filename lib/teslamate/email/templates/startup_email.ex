@@ -288,10 +288,10 @@ defmodule TeslaMate.Email.Templates.StartupEmail do
               <div class="label">⚡ Energy Added</div>
               <div class="value">#{info.latest_charging.charge_energy_added} kWh</div>
             </div>
-            <div class="stat-box">
-              <div class="label">⏱️ Duration</div>
-              <div class="value">#{info.latest_charging.duration_min} minutes</div>
-            </div>
+                          <div class="stat-box">
+                <div class="label">⏱️ Duration</div>
+                <div class="value">#{TeslaMate.Email.format_duration_minutes(info.latest_charging.duration_min)}</div>
+              </div>
             <div class="stat-box">
               <div class="label">🔌 Charging Type</div>
               <div class="value">#{TeslaMate.Log.determine_charging_type(info.latest_charging)}</div>
@@ -357,7 +357,7 @@ defmodule TeslaMate.Email.Templates.StartupEmail do
             <div class="info-grid">
               <div class="info-row">
                 <div class="label">⏰ Time Period</div>
-                <div class="value">#{TeslaMate.Email.format_datetime_local(info.latest_charging.start_date)} - #{TeslaMate.Email.format_datetime_local(info.latest_charging.end_date)} (Duration: #{info.latest_charging.duration_min} minutes)</div>
+                <div class="value">#{TeslaMate.Email.format_datetime_local(info.latest_charging.start_date)} - #{TeslaMate.Email.format_datetime_local(info.latest_charging.end_date)} (Duration: #{TeslaMate.Email.format_duration_minutes(info.latest_charging.duration_min)})</div>
               </div>
             </div>
           </div>
@@ -481,7 +481,7 @@ defmodule TeslaMate.Email.Templates.StartupEmail do
 
       📊 Charging Statistics:
       - ⚡ Energy Added: #{info.latest_charging.charge_energy_added} kWh
-      - ⏱️ Duration: #{info.latest_charging.duration_min} minutes
+      - ⏱️ Duration: #{TeslaMate.Email.format_duration_minutes(info.latest_charging.duration_min)}
       - 🔌 Charging Type: #{TeslaMate.Log.determine_charging_type(info.latest_charging)}
       - 💰 Total Cost: #{if info.latest_charging.cost, do: "¥#{info.latest_charging.cost}", else: "Not available"}
       - ⚡ Avg Power: #{if info.latest_charging.power_avg, do: "#{Float.round(info.latest_charging.power_avg, 1)} kW", else: "N/A"}
