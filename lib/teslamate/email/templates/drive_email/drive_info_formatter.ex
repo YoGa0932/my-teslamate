@@ -85,8 +85,8 @@ defmodule TeslaMate.Email.Templates.DriveEmail.DriveInfoFormatter do
   defp format_energy_used(energy) when is_struct(energy, Decimal), do: "#{Float.round(Decimal.to_float(energy), 3)} kWh"
   defp format_energy_used(_), do: "N/A"
 
-  defp format_efficiency_ratio(ratio) when is_number(ratio), do: "#{Float.round(ratio * 1.0, 3)}"
-  defp format_efficiency_ratio(ratio) when is_struct(ratio, Decimal), do: "#{Float.round(Decimal.to_float(ratio), 3)}"
+  defp format_efficiency_ratio(ratio) when is_number(ratio), do: "#{Float.round(ratio * 100, 1)}%"
+  defp format_efficiency_ratio(ratio) when is_struct(ratio, Decimal), do: "#{Float.round(Decimal.to_float(ratio) * 100, 1)}%"
   defp format_efficiency_ratio(_), do: "N/A"
 
   defp format_since_last_charge_energy(energy) when is_number(energy), do: "#{Float.round(energy * 1.0, 3)} kWh"

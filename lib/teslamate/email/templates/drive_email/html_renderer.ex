@@ -31,7 +31,7 @@ defmodule TeslaMate.Email.Templates.DriveEmail.HtmlRenderer do
         .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 20px 0; }
         .primary-stats { grid-template-columns: 1fr 1fr; gap: 20px; }
         .stat-box { background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); padding: 15px; border-radius: 8px; border-left: 4px solid #667eea; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        .stat-box.primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-left: 4px solid #4c63d2; }
+        .stat-box.primary { background: linear-gradient(135deg, #1E40AF 0%, #3B82F6 100%); color: white; border-left: 4px solid #1D4ED8; }
         .stat-box.primary .label { color: rgba(255,255,255,0.9); font-size: 16px; }
         .stat-box.primary .value { color: white; font-size: 18px; font-weight: bold; }
         .stat-box .label { font-weight: bold; color: #333; font-size: 14px; }
@@ -165,7 +165,7 @@ defmodule TeslaMate.Email.Templates.DriveEmail.HtmlRenderer do
                 <h4>⏰ Time</h4>
                 <div class="info-row">
                   <div class="label">⏰ Time Period</div>
-                  <div class="value">#{drive_info.start_time} - #{drive_info.end_time}</div>
+                  <div class="value">#{drive_info.start_time} - #{drive_info.end_time} (Duration: #{drive_info.duration})</div>
                 </div>
               </div>
               

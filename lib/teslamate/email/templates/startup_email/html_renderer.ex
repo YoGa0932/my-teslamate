@@ -39,7 +39,7 @@ defmodule TeslaMate.Email.Templates.StartupEmail.HtmlRenderer do
         .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 20px 0; }
         .primary-stats { grid-template-columns: 1fr 1fr; gap: 20px; }
         .stat-box { background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); padding: 15px; border-radius: 8px; border-left: 4px solid #667eea; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        .stat-box.primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-left: 4px solid #4c63d2; }
+        .stat-box.primary { background: linear-gradient(135deg, #1E40AF 0%, #3B82F6 100%); color: white; border-left: 4px solid #1D4ED8; }
         .stat-box.primary .label { color: rgba(255,255,255,0.9); font-size: 16px; }
         .stat-box.primary .value { color: white; font-size: 18px; font-weight: bold; }
         .stat-box .label { font-weight: bold; color: #333; font-size: 14px; }
@@ -282,7 +282,7 @@ defmodule TeslaMate.Email.Templates.StartupEmail.HtmlRenderer do
           <h4>⏰ Time</h4>
           <div class="info-row">
             <div class="label">⏰ Time Period</div>
-            <div class="value">#{drive_info.start_time} - #{drive_info.end_time}</div>
+            <div class="value">#{drive_info.start_time} - #{drive_info.end_time} (Duration: #{drive_info.duration})</div>
           </div>
         </div>
         
@@ -357,81 +357,90 @@ defmodule TeslaMate.Email.Templates.StartupEmail.HtmlRenderer do
 
     """
     <h3>🔋 Latest Charging Session</h3>
-    <div class="stats">
-      <div class="stat-box">
+    
+    <div class="stats primary-stats">
+      <div class="stat-box primary">
         <div class="label">⚡ Energy Added</div>
         <div class="value">#{charging_info.energy_added}</div>
       </div>
-      <div class="stat-box">
+      <div class="stat-box primary">
         <div class="label">⏱️ Duration</div>
         <div class="value">#{charging_info.duration}</div>
       </div>
-      <div class="stat-box">
+      <div class="stat-box primary">
         <div class="label">🔌 Charging Type</div>
         <div class="value">#{charging_info.charging_type}</div>
       </div>
-      <div class="stat-box">
+      <div class="stat-box primary">
         <div class="label">💰 Total Cost</div>
         <div class="value">#{charging_info.total_cost}</div>
       </div>
-      <div class="stat-box">
-        <div class="label">⚡ Avg Power</div>
-        <div class="value">#{charging_info.power_avg}</div>
-      </div>
-      <div class="stat-box">
-        <div class="label">⚡ Energy Used (Grid)</div>
-        <div class="value">#{charging_info.energy_used}</div>
-      </div>
-      <div class="stat-box">
-        <div class="label">📊 Efficiency</div>
-        <div class="value">#{charging_info.efficiency}</div>
-      </div>
-      <div class="stat-box">
-        <div class="label">💵 Price per kWh</div>
-        <div class="value">#{charging_info.cost_per_kwh}</div>
-      </div>
     </div>
-
-    <div class="section battery-section">
-      <h3>🔋 Battery Information</h3>
-      <div class="info-grid">
-        <div class="info-row">
-          <div class="label">🔋 Battery Level Change</div>
-          <div class="value">#{charging_info.battery_level_change}</div>
+    
+    <div class="section detailed-stats">
+      <h3>📈 Detailed Statistics</h3>
+      <div class="stats-grid">
+        <div class="stat-group">
+          <h4>⚡ Energy</h4>
+          <div class="stat-box">
+            <div class="label">💵 Price per kWh</div>
+            <div class="value">#{charging_info.cost_per_kwh}</div>
+          </div>
+          <div class="stat-box">
+            <div class="label">⚡ Energy Used (Grid)</div>
+            <div class="value">#{charging_info.energy_used}</div>
+          </div>
         </div>
-        <div class="info-row">
-          <div class="label">📊 Rated Range Change</div>
-          <div class="value">#{charging_info.rated_range_change}</div>
+        <div class="stat-group">
+          <h4>⚡ Power</h4>
+          <div class="stat-box">
+            <div class="label">⚡ Avg Power</div>
+            <div class="value">#{charging_info.power_avg}</div>
+          </div>
+          <div class="stat-box">
+            <div class="label">📊 Efficiency</div>
+            <div class="value">#{charging_info.efficiency}</div>
+          </div>
         </div>
-      </div>
-    </div>
-
-    <div class="section location-section">
-      <h3>📍 Charging Location</h3>
-      <div class="info-grid">
-        <div class="info-row">
-          <div class="label">🏁 Charging Location</div>
-          <div class="value">#{charging_info.charging_location}</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="section environment-section">
-      <h3>🌡️ Environment Information</h3>
-      <div class="info-grid">
-        <div class="info-row">
-          <div class="label">🌡️ Avg Outside Temp</div>
-          <div class="value">#{charging_info.outside_temp}</div>
+        <div class="stat-group">
+          <h4>🔋 Battery</h4>
+          <div class="stat-box">
+            <div class="label">🔋 Battery Level Change</div>
+            <div class="value">#{charging_info.battery_level_change}</div>
+          </div>
+          <div class="stat-box">
+            <div class="label">📊 Rated Range Change</div>
+            <div class="value">#{charging_info.rated_range_change}</div>
+          </div>
         </div>
       </div>
     </div>
-
-    <div class="section time-section">
-      <h3>⏰ Time Information</h3>
-      <div class="info-grid">
-        <div class="info-row">
-          <div class="label">⏰ Time Period</div>
-          <div class="value">#{charging_info.start_time} - #{charging_info.end_time} (Duration: #{charging_info.duration})</div>
+    
+    <div class="section details">
+      <h3>📊 Additional Details</h3>
+      <div class="details-grid">
+        <div class="detail-group">
+          <h4>📍 Location</h4>
+          <div class="info-row">
+            <div class="label">🏁 Charging Location</div>
+            <div class="value">#{charging_info.charging_location}</div>
+          </div>
+        </div>
+        
+        <div class="detail-group">
+          <h4>⏰ Time</h4>
+          <div class="info-row">
+            <div class="label">⏰ Time Period</div>
+            <div class="value">#{charging_info.start_time} - #{charging_info.end_time} (Duration: #{charging_info.duration})</div>
+          </div>
+        </div>
+        
+        <div class="detail-group">
+          <h4>🌡️ Environment</h4>
+          <div class="info-row">
+            <div class="label">🌡️ Avg Outside Temp</div>
+            <div class="value">#{charging_info.outside_temp}</div>
+          </div>
         </div>
       </div>
     </div>
