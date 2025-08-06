@@ -111,9 +111,9 @@ defmodule TeslaMate.Email.Templates.ChargingEmail.ChargingInfoFormatter do
 
   defp format_charging_location(geofence, address) do
     cond do
-      geofence and address ->
+      not is_nil(geofence) and not is_nil(address) ->
         "#{geofence.name} (#{address.name})"
-      address ->
+      not is_nil(address) ->
         "#{address.name}, #{address.city}"
       true ->
         "Unknown Location"
