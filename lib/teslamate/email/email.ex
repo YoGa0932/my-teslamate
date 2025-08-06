@@ -219,8 +219,10 @@ defmodule TeslaMate.Email do
     # Calculate energy consumption
     energy_consumption_wh_per_km = case {drive.start_rated_range_km, drive.end_rated_range_km, efficiency} do
       {start_range, end_range, eff} when not is_nil(start_range) and not is_nil(end_range) and not is_nil(eff) ->
-        range_diff = (if is_struct(start_range, Decimal), do: Decimal.to_float(start_range), else: start_range) - 
-                     (if is_struct(end_range, Decimal), do: Decimal.to_float(end_range), else: end_range)
+        # start_rated_range_km and end_rated_range_km are numeric (Decimal)
+        start_float = Decimal.to_float(start_range)
+        end_float = Decimal.to_float(end_range)
+        range_diff = start_float - end_float
         if range_diff > 0 and drive.distance && drive.distance > 0 do
           range_diff * eff * 1000 / drive.distance
         else
@@ -232,8 +234,10 @@ defmodule TeslaMate.Email do
     # Calculate energy used
     energy_used_kwh = case {drive.start_rated_range_km, drive.end_rated_range_km, efficiency} do
       {start_range, end_range, eff} when not is_nil(start_range) and not is_nil(end_range) and not is_nil(eff) ->
-        range_diff = (if is_struct(start_range, Decimal), do: Decimal.to_float(start_range), else: start_range) - 
-                     (if is_struct(end_range, Decimal), do: Decimal.to_float(end_range), else: end_range)
+        # start_rated_range_km and end_rated_range_km are numeric (Decimal)
+        start_float = Decimal.to_float(start_range)
+        end_float = Decimal.to_float(end_range)
+        range_diff = start_float - end_float
         range_diff * eff
       _ -> nil
     end
@@ -250,19 +254,22 @@ defmodule TeslaMate.Email do
 
   defp calculate_charging_metrics(charging_process) do
     # Calculate average power
-    power_avg = if charging_process.charge_energy_added && charging_process.duration_min && charging_process.duration_min > 0 do
-      charging_process.charge_energy_added / (charging_process.duration_min / 60.0)
-    else
-      nil
+    power_avg = case {charging_process.charge_energy_added, charging_process.duration_min} do
+      {energy_added, duration} when not is_nil(energy_added) and not is_nil(duration) and duration > 0 ->
+        # charge_energy_added is numeric (Decimal), duration_min is smallint (integer)
+        energy_float = Decimal.to_float(energy_added)
+        energy_float / (duration / 60.0)
+      _ -> nil
     end
 
     # Calculate cost per kWh
     cost_per_kwh = case {charging_process.cost, charging_process.charge_energy_added} do
-      {cost, energy_added} when not is_nil(cost) and not is_nil(energy_added) and energy_added > 0 ->
-        if is_struct(cost, Decimal) and is_struct(energy_added, Decimal) do
+      {cost, energy_added} when not is_nil(cost) and not is_nil(energy_added) ->
+        energy_float = Decimal.to_float(energy_added)
+        if energy_float > 0 do
           Decimal.div(cost, energy_added)
         else
-          cost / energy_added
+          nil
         end
       _ -> nil
     end
@@ -277,8 +284,10 @@ defmodule TeslaMate.Email do
       is_nil(start_rated_range) or is_nil(end_rated_range) or is_nil(actual_distance) ->
         "N/A"
       true ->
-        range_change = (if is_struct(start_rated_range, Decimal), do: Decimal.to_float(start_rated_range), else: start_rated_range) - 
-                       (if is_struct(end_rated_range, Decimal), do: Decimal.to_float(end_rated_range), else: end_rated_range)
+        # start_rated_range and end_rated_range are numeric (Decimal)
+        start_float = Decimal.to_float(start_rated_range)
+        end_float = Decimal.to_float(end_rated_range)
+        range_change = start_float - end_float
         actual_distance_float = actual_distance
         
         cond do
