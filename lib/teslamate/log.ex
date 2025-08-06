@@ -784,10 +784,14 @@ defmodule TeslaMate.Log do
         rated_float = if is_struct(rated_range, Decimal), do: Decimal.to_float(rated_range), else: rated_range
         
         # Calculate projected range based on current efficiency
-        # Formula: rated_range * efficiency_factor
+        # Formula: rated_range - (rated_range * efficiency_factor)
+        # efficiency_factor represents additional consumption ratio
         if battery_float > 0 and rated_float > 0 do
           # Apply efficiency factor to get projected range
-          projected_range = rated_float * eff
+          # If efficiency is 0.138, it means 13.8% additional consumption
+          # So projected range = rated_range - (rated_range * efficiency)
+          # This gives us the actual expected range considering efficiency loss
+          projected_range = rated_float - (rated_float * eff)
           Float.round(projected_range, 1)
         else
           nil

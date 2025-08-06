@@ -9,11 +9,11 @@ defmodule TeslaMate.Email.Templates.ChargingEmail.ChargingInfoFormatter do
     %{
       # Basic statistics
       energy_added: format_energy_added(charging.charge_energy_added),
-      duration: format_duration(charging.duration_min),
+      duration_min: format_duration(charging.duration_min),
       charging_type: format_charging_type(charging),
       total_cost: format_total_cost(charging),
-      power_avg: format_power_avg(charging.power_avg),
-      energy_used: format_energy_used(charging.charge_energy_used),
+      power_avg: CommonFormatter.format_power_avg(charging.power_avg),
+      energy_used: CommonFormatter.format_energy_used(charging.charge_energy_used),
       efficiency: format_efficiency(charging.charge_energy_added, charging.charge_energy_used),
       cost_per_kwh: format_cost_per_kwh(charging),
       
@@ -29,7 +29,8 @@ defmodule TeslaMate.Email.Templates.ChargingEmail.ChargingInfoFormatter do
       
       # Time information
       start_time: CommonFormatter.format_datetime(charging.start_date),
-      end_time: CommonFormatter.format_datetime(charging.end_date)
+      end_time: CommonFormatter.format_datetime(charging.end_date),
+      duration: CommonFormatter.format_precise_duration(charging.precise_duration_seconds)
     }
   end
 
@@ -37,7 +38,7 @@ defmodule TeslaMate.Email.Templates.ChargingEmail.ChargingInfoFormatter do
   defp format_energy_added(energy) when is_struct(energy, Decimal), do: "#{Decimal.to_float(energy)} kWh"
   defp format_energy_added(_), do: "N/A"
 
-  defp format_duration(duration) when is_number(duration), do: CommonFormatter.format_duration_minutes(duration)
+  defp format_duration(duration) when is_number(duration), do: CommonFormatter.format_precise_duration(duration * 60)
   defp format_duration(_), do: "N/A"
 
   defp format_charging_type(charging) do
@@ -62,12 +63,9 @@ defmodule TeslaMate.Email.Templates.ChargingEmail.ChargingInfoFormatter do
     end
   end
 
-  defp format_power_avg(power) when is_number(power), do: "#{Float.round(power, 1)} kW"
-  defp format_power_avg(_), do: "N/A"
 
-  defp format_energy_used(energy) when is_number(energy), do: "#{energy} kWh"
-  defp format_energy_used(energy) when is_struct(energy, Decimal), do: "#{Decimal.to_float(energy)} kWh"
-  defp format_energy_used(_), do: "N/A"
+
+
 
   defp format_efficiency(energy_added, energy_used) do
     case {energy_used, energy_added} do

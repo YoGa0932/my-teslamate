@@ -8,6 +8,7 @@ defmodule TeslaMate.Email do
   import Ecto.Query
   alias TeslaMate.Log.{Drive, ChargingProcess}
   alias TeslaMate.Repo
+  alias TeslaMate.Email.PreloadHelpers
 
   @doc """
   Send drive record notification email
@@ -27,7 +28,7 @@ defmodule TeslaMate.Email do
         
         # Simplified calculation logic
         drive_with_calculations = calculate_drive_metrics(drive)
-        drive = TeslaMate.Repo.preload(drive_with_calculations, [:car, :start_address, :end_address, :start_geofence, :end_geofence])
+        drive = PreloadHelpers.preload_drive_for_email(drive_with_calculations)
 
         # Generate email subject
         drive_subject = generate_drive_subject(drive)
@@ -82,7 +83,7 @@ defmodule TeslaMate.Email do
         
         # Simplified calculation logic
         charging_with_calculations = calculate_charging_metrics(charging_process)
-        charging_process = TeslaMate.Repo.preload(charging_with_calculations, [:car, :address, :geofence])
+        charging_process = PreloadHelpers.preload_charging_for_email(charging_with_calculations)
 
         # Generate email subject
         charging_subject = generate_charging_subject(charging_process)
@@ -195,6 +196,8 @@ defmodule TeslaMate.Email do
     end
   end
 
+
+
   defp get_latest_drive() do
     # Get latest drive record with car information
     Drive
@@ -207,7 +210,7 @@ defmodule TeslaMate.Email do
         nil
       drive -> 
         drive
-        |> Repo.preload([:car, :start_address, :end_address, :start_geofence, :end_geofence])
+        |> PreloadHelpers.preload_drive_for_email()
         |> calculate_drive_metrics()
     end
   end
@@ -299,6 +302,13 @@ defmodule TeslaMate.Email do
   end
 
   defp calculate_charging_metrics(charging_process) do
+    # Calculate precise duration in seconds
+    precise_duration_seconds = case {charging_process.start_date, charging_process.end_date} do
+      {start_date, end_date} when not is_nil(start_date) and not is_nil(end_date) ->
+        DateTime.diff(end_date, start_date, :second)
+      _ -> nil
+    end
+
     # Calculate average power
     power_avg = case {charging_process.charge_energy_added, charging_process.duration_min} do
       {energy_added, duration} when not is_nil(energy_added) and not is_nil(duration) and duration > 0 ->
@@ -321,6 +331,7 @@ defmodule TeslaMate.Email do
     end
 
     charging_process
+    |> Map.put(:precise_duration_seconds, precise_duration_seconds)
     |> Map.put(:power_avg, power_avg)
     |> Map.put(:cost_per_kwh, cost_per_kwh)
   end
@@ -511,18 +522,7 @@ defmodule TeslaMate.Email do
     end
   end
 
-  def format_duration_minutes(minutes) when is_number(minutes) do
-    hours = div(minutes, 60)
-    remaining_minutes = rem(minutes, 60)
-    
-    cond do
-      hours > 0 -> "#{hours}h #{remaining_minutes}m"
-      remaining_minutes > 0 -> "#{remaining_minutes}m"
-      true -> "0m"
-    end
-  end
 
-  def format_duration_minutes(_), do: "N/A"
 
   defp get_smtp_config() do
     username = case System.get_env("SMTP_USERNAME") do
@@ -603,10 +603,7 @@ defmodule TeslaMate.Email do
     end
   end
 
-  def format_datetime(datetime) when not is_nil(datetime) do
-    Calendar.strftime(datetime, "%Y-%m-%d %H:%M:%S")
-  end
-  def format_datetime(_), do: "Unknown"
+
 
   def format_datetime_local(datetime) when not is_nil(datetime) do
     local_datetime = DateTime.add(datetime, 8 * 60 * 60, :second)
