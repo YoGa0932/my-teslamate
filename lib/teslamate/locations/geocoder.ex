@@ -15,51 +15,59 @@ defmodule TeslaMate.Locations.Geocoder do
   alias TeslaMate.Locations.Address
 
   def reverse_lookup(lat, lon, lang \\ "zh") do
-    {lat_float, lon_float} = case {lat, lon} do
-      {%Decimal{} = lat_dec, %Decimal{} = lon_dec} ->
-        {Decimal.to_float(lat_dec), Decimal.to_float(lon_dec)}
-      {%Decimal{} = lat_dec, lon_num} when is_number(lon_num) ->
-        {Decimal.to_float(lat_dec), lon_num}
-      {lat_num, %Decimal{} = lon_dec} when is_number(lat_num) ->
-        {lat_num, Decimal.to_float(lon_dec)}
-      {lat_num, lon_num} when is_number(lat_num) and is_number(lon_num) ->
-        {lat_num, lon_num}
-      _ ->
-        Logger.error("Invalid coordinate format", coordinates: {lat, lon})
-        {:error, :invalid_coordinates}
-    end
-
-    case {lat_float, lon_float} do
-      {:error, :invalid_coordinates} ->
-        {:error, {:geocoding_failed, "Invalid coordinates"}}
+    case convert_coordinates_to_float(lat, lon) do
+      {:error, reason} ->
+        {:error, {:geocoding_failed, reason}}
       
       {lat_f, lon_f} ->
-        # Step 1: Use Amap coordinate conversion API to convert WGS84 to GCJ-02
-        case convert_coordinates_with_amap(lon_f, lat_f) do
-          {:ok, {gcj_lon, gcj_lat}} ->
-            # Step 2: Use converted coordinates for reverse geocoding
-            opts = [
-              key: get_amap_key(),
-              location: "#{gcj_lon},#{gcj_lat}",
-              output: "json",
-              radius: "1000",
-              extensions: "all"
-            ]
-
-            with {:ok, address_raw} <- query("/v3/geocode/regeo", lang, opts),
-                 {:ok, address} <- into_address(address_raw, gcj_lat, gcj_lon) do
-              {:ok, address}
-            else
-              {:error, reason} ->
-                Logger.error("Amap geocoding failed", reason: reason)
-                {:error, reason}
-            end
-          
-          {:error, reason} ->
-            Logger.error("Coordinate conversion failed", reason: reason)
-            {:error, {:geocoding_failed, "Coordinate conversion failed: #{reason}"}}
-        end
+        perform_reverse_lookup(lat_f, lon_f, lang)
     end
+  end
+
+  defp convert_coordinates_to_float(lat, lon) do
+    case {normalize_coordinate(lat), normalize_coordinate(lon)} do
+      {nil, _} -> {:error, "Invalid latitude format"}
+      {_, nil} -> {:error, "Invalid longitude format"}
+      {lat_f, lon_f} -> {lat_f, lon_f}
+    end
+  end
+
+  defp normalize_coordinate(coord) do
+    case coord do
+      %Decimal{} -> Decimal.to_float(coord)
+      coord when is_number(coord) -> coord
+      _ -> nil
+    end
+  end
+
+  defp perform_reverse_lookup(lat_f, lon_f, lang) do
+    case convert_coordinates_with_amap(lon_f, lat_f) do
+      {:ok, {gcj_lon, gcj_lat}} ->
+        opts = build_geocoding_options(gcj_lon, gcj_lat)
+        
+        with {:ok, address_raw} <- query("/v3/geocode/regeo", lang, opts),
+             {:ok, address} <- parse_address_response(address_raw, gcj_lat, gcj_lon) do
+          {:ok, address}
+        else
+          {:error, reason} ->
+            Logger.error("Amap geocoding failed", reason: reason)
+            {:error, reason}
+        end
+      
+      {:error, reason} ->
+        Logger.error("Coordinate conversion failed", reason: reason)
+        {:error, {:geocoding_failed, "Coordinate conversion failed: #{reason}"}}
+    end
+  end
+
+  defp build_geocoding_options(lon, lat) do
+    [
+      key: get_amap_key(),
+      location: "#{lon},#{lat}",
+      output: "json",
+      radius: "1000",
+      extensions: "all"
+    ]
   end
 
   def details(addresses, lang) do
@@ -70,47 +78,47 @@ defmodule TeslaMate.Locations.Geocoder do
 
     addresses
     |> Enum.map(fn %Address{} = address ->
-      {lat, lon} = case {address.latitude, address.longitude} do
-        {%Decimal{} = lat_dec, %Decimal{} = lon_dec} ->
-          {Decimal.to_float(lat_dec), Decimal.to_float(lon_dec)}
-        {%Decimal{} = lat_dec, lon_num} when is_number(lon_num) ->
-          {Decimal.to_float(lat_dec), lon_num}
-        {lat_num, %Decimal{} = lon_dec} when is_number(lat_num) ->
-          {lat_num, Decimal.to_float(lon_dec)}
-        {lat_num, lon_num} when is_number(lat_num) and is_number(lon_num) ->
-          {lat_num, lon_num}
-        _ ->
-          Logger.warning("Invalid address coordinate format",
-            address_id: address.id,
-            coordinates: {address.latitude, address.longitude}
-          )
-          {nil, nil}
-      end
+      process_single_address(address, lang)
+    end)
+    |> filter_successful_addresses()
+    |> log_batch_results(length(addresses))
+  end
 
-      case {lat, lon} do
-        {nil, nil} ->
-          {address, nil}
-        {lat_f, lon_f} ->
-          case reverse_lookup(lat_f, lon_f, lang) do
-            {:ok, attrs} -> {address, attrs}
-            {:error, reason} ->
-              Logger.warning("Single address failed in batch query",
-                address_id: address.id,
-                coordinates: {lat_f, lon_f},
-                reason: reason
-              )
-              {address, nil}
-          end
-      end
-    end)
+  defp process_single_address(address, lang) do
+    case convert_coordinates_to_float(address.latitude, address.longitude) do
+      {nil, nil} ->
+        Logger.warning("Invalid address coordinate format",
+          address_id: address.id,
+          coordinates: {address.latitude, address.longitude}
+        )
+        {address, nil}
+      
+      {lat_f, lon_f} ->
+        case reverse_lookup(lat_f, lon_f, lang) do
+          {:ok, attrs} -> {address, attrs}
+          {:error, reason} ->
+            Logger.warning("Single address failed in batch query",
+              address_id: address.id,
+              coordinates: {lat_f, lon_f},
+              reason: reason
+            )
+            {address, nil}
+        end
+    end
+  end
+
+  defp filter_successful_addresses(addresses_with_attrs) do
+    addresses_with_attrs
     |> Enum.reject(fn {_address, attrs} -> is_nil(attrs) end)
-    |> then(fn addresses_with_attrs ->
-      Logger.info("Batch address details query completed",
-        total: length(addresses),
-        success: length(addresses_with_attrs)
-      )
-      {:ok, Enum.map(addresses_with_attrs, fn {_address, attrs} -> attrs end)}
-    end)
+    |> Enum.map(fn {_address, attrs} -> attrs end)
+  end
+
+  defp log_batch_results(addresses_with_attrs, total_count) do
+    Logger.info("Batch address details query completed",
+      total: total_count,
+      success: length(addresses_with_attrs)
+    )
+    {:ok, addresses_with_attrs}
   end
 
   defp query(url, _lang, params) do
@@ -136,151 +144,43 @@ defmodule TeslaMate.Locations.Geocoder do
     end
   end
 
-  defp into_address(%{"status" => "0", "info" => reason}, _lat, _lon) do
+  defp parse_address_response(%{"status" => "0", "info" => reason}, _lat, _lon) do
     Logger.error("Amap API returned status 0 (failed)", reason: reason)
     {:error, {:geocoding_failed, reason}}
   end
 
-  defp into_address(%{"status" => "1", "regeocode" => regeocode}, lat, lon) do
+  defp parse_address_response(%{"status" => "1", "regeocode" => regeocode}, lat, lon) do
     address_component = Map.get(regeocode, "addressComponent", %{})
     formatted_address = Map.get(regeocode, "formatted_address", "Unknown")
 
-    unique_id = :crypto.hash(:md5, "#{lat}#{lon}")
-                |> Base.encode16()
-                |> binary_part(0, 8)
-                |> String.to_integer(16)
-                |> abs()
-                |> rem(2_147_483_647)
-
-    neighbourhood = case Map.get(address_component, "neighborhood", %{}) do
-      %{"name" => names} when is_list(names) -> Enum.join(names, ", ")
-      %{"name" => name} when is_binary(name) -> name
-      _ -> nil
-    end
-
-    address_name = case get_in(address_component, ["streetNumber", "street"]) do
-      nil -> nil
-      value when is_binary(value) -> value
-      value -> to_string(value)
-    end
+    address = build_address_struct(regeocode, address_component, formatted_address, lat, lon)
     
-    best_poi = case get_in(regeocode, ["pois"]) do
-      pois when is_list(pois) and length(pois) > 0 ->
-        pois
-        |> Enum.map(fn poi ->
-          distance = case poi["distance"] do
-            dist when is_binary(dist) -> 
-              case Float.parse(dist) do
-                {d, _} -> d
-                :error -> 999999.0
-              end
-            dist when is_number(dist) -> dist
-            _ -> 999999.0
-          end
-          
-          weight = case poi["poiweight"] do
-            w when is_binary(w) -> 
-              case Float.parse(w) do
-                {wt, _} -> wt
-                :error -> 0.0
-              end
-            w when is_number(w) -> w
-            _ -> 0.0
-          end
-          
-          {poi["name"], distance, weight}
-        end)
-        |> Enum.filter(fn {name, _distance, _weight} -> 
-          name != nil and name != ""
-        end)
-        |> Enum.sort_by(fn {_name, distance, weight} -> 
-          {distance, -weight}
-        end)
-        |> List.first()
-        
-      _ -> nil
-    end
-    
-    poi_name = case best_poi do
-      {name, _distance, _weight} when is_binary(name) -> name
-      _ -> nil
-    end
-    
-    name = cond do
-      poi_name && address_name -> 
-        "#{address_name} #{poi_name}"
-      poi_name -> 
-        case get_in(address_component, ["streetNumber", "street"]) do
-          street when is_binary(street) and street != "" ->
-            "#{street} #{poi_name}"
-          _ -> 
-            poi_name
-        end
-      address_name -> 
-        address_name
-      true -> 
-        if formatted_address && formatted_address != "Unknown" do
-          formatted_address
-        else
-          parts = [
-            address_component["province"],
-            address_component["city"], 
-            address_component["district"],
-            address_component["township"]
-          ]
-          |> Enum.reject(&is_nil/1)
-          |> Enum.join("")
-          
-          if parts != "" do
-            parts
-          else
-            "Unknown address (#{lat}, #{lon})"
-          end
-        end
-    end
+    validate_address_fields(address)
+  end
 
-    city = case address_component["city"] do
-      cities when is_list(cities) -> Enum.join(cities, ", ")
-      city when is_binary(city) -> city
-      _ -> nil
-    end
+  defp parse_address_response(raw, _lat, _lon) do
+    Logger.warning("Failed to parse Amap API response", raw_response: raw)
+    {:error, {:geocoding_failed, "Invalid response format"}}
+  end
 
-    display_name = if formatted_address && formatted_address != "Unknown" do
-      formatted_address
-    else
-      parts = [
-        address_component["province"],
-        address_component["city"],
-        address_component["district"],
-        address_component["township"]
-      ]
-      |> Enum.reject(&is_nil/1)
-      |> Enum.join("")
-      
-      if parts != "" do
-        parts
-      else
-        "Unknown address (#{lat}, #{lon})"
-      end
-    end
+  defp build_address_struct(regeocode, address_component, formatted_address, lat, lon) do
+    unique_id = generate_unique_id(lat, lon)
+    neighbourhood = extract_neighbourhood(address_component)
+    address_name = extract_address_name(address_component)
+    poi_name = extract_best_poi_name(regeocode)
+    name = build_address_name(poi_name, address_name, address_component, formatted_address, lat, lon)
+    city = extract_city(address_component)
+    display_name = build_display_name(address_component, formatted_address, lat, lon)
 
-    address = %{
+    %{
       display_name: display_name,
       osm_id: unique_id,
       osm_type: "amap",
       latitude: Decimal.new(Float.to_string(lat)),
       longitude: Decimal.new(Float.to_string(lon)),
       name: name,
-      house_number: case get_in(address_component, ["streetNumber", "number"]) do
-        nil -> nil
-        value when is_binary(value) -> value
-        value -> to_string(value)
-      end,
-      road: case get_in(address_component, ["streetNumber", "street"]) do
-        nil -> nil
-        value when is_binary(value) -> value
-        value -> to_string(value)
-      end,
+      house_number: extract_house_number(address_component),
+      road: extract_road(address_component),
       neighbourhood: neighbourhood,
       city: city,
       county: address_component["district"] || nil,
@@ -293,7 +193,159 @@ defmodule TeslaMate.Locations.Geocoder do
         "status" => "1"
       }
     }
+  end
 
+  defp generate_unique_id(lat, lon) do
+    :crypto.hash(:md5, "#{lat}#{lon}")
+    |> Base.encode16()
+    |> binary_part(0, 8)
+    |> String.to_integer(16)
+    |> abs()
+    |> rem(2_147_483_647)
+  end
+
+  defp extract_neighbourhood(address_component) do
+    case Map.get(address_component, "neighborhood", %{}) do
+      %{"name" => names} when is_list(names) -> Enum.join(names, ", ")
+      %{"name" => name} when is_binary(name) -> name
+      _ -> nil
+    end
+  end
+
+  defp extract_address_name(address_component) do
+    case get_in(address_component, ["streetNumber", "street"]) do
+      nil -> nil
+      value when is_binary(value) -> value
+      value -> to_string(value)
+    end
+  end
+
+  defp extract_best_poi_name(regeocode) do
+    case get_in(regeocode, ["pois"]) do
+      pois when is_list(pois) and length(pois) > 0 ->
+        pois
+        |> Enum.map(&calculate_poi_score/1)
+        |> Enum.filter(&valid_poi?/1)
+        |> Enum.sort_by(fn {_name, distance, weight} -> {distance, -weight} end)
+        |> List.first()
+        |> extract_poi_name()
+      
+      _ -> nil
+    end
+  end
+
+  defp calculate_poi_score(poi) do
+    distance = parse_poi_distance(poi["distance"])
+    weight = parse_poi_weight(poi["poiweight"])
+    {poi["name"], distance, weight}
+  end
+
+  defp parse_poi_distance(dist) when is_binary(dist) do
+    case Float.parse(dist) do
+      {d, _} -> d
+      :error -> 999999.0
+    end
+  end
+
+  defp parse_poi_distance(dist) when is_number(dist), do: dist
+  defp parse_poi_distance(_), do: 999999.0
+
+  defp parse_poi_weight(w) when is_binary(w) do
+    case Float.parse(w) do
+      {wt, _} -> wt
+      :error -> 0.0
+    end
+  end
+
+  defp parse_poi_weight(w) when is_number(w), do: w
+  defp parse_poi_weight(_), do: 0.0
+
+  defp valid_poi?({name, _distance, _weight}), do: name != nil and name != ""
+  defp valid_poi?(_), do: false
+
+  defp extract_poi_name({name, _distance, _weight}) when is_binary(name), do: name
+  defp extract_poi_name(_), do: nil
+
+  defp build_address_name(poi_name, address_name, address_component, formatted_address, lat, lon) do
+    cond do
+      poi_name && address_name -> 
+        "#{address_name} #{poi_name}"
+      poi_name -> 
+        build_poi_with_street_name(poi_name, address_component)
+      address_name -> 
+        address_name
+      true -> 
+        build_fallback_address_name(address_component, formatted_address, lat, lon)
+    end
+  end
+
+  defp build_poi_with_street_name(poi_name, address_component) do
+    case get_in(address_component, ["streetNumber", "street"]) do
+      street when is_binary(street) and street != "" ->
+        "#{street} #{poi_name}"
+      _ -> 
+        poi_name
+    end
+  end
+
+  defp build_fallback_address_name(address_component, formatted_address, lat, lon) do
+    if formatted_address && formatted_address != "Unknown" do
+      formatted_address
+    else
+      build_address_from_components(address_component, lat, lon)
+    end
+  end
+
+  defp build_address_from_components(address_component, lat, lon) do
+    parts = [
+      address_component["province"],
+      address_component["city"], 
+      address_component["district"],
+      address_component["township"]
+    ]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.join("")
+    
+    if parts != "" do
+      parts
+    else
+      "Unknown address (#{lat}, #{lon})"
+    end
+  end
+
+  defp extract_city(address_component) do
+    case address_component["city"] do
+      cities when is_list(cities) -> Enum.join(cities, ", ")
+      city when is_binary(city) -> city
+      _ -> nil
+    end
+  end
+
+  defp build_display_name(address_component, formatted_address, lat, lon) do
+    if formatted_address && formatted_address != "Unknown" do
+      formatted_address
+    else
+      build_address_from_components(address_component, lat, lon)
+    end
+  end
+
+  defp extract_house_number(address_component) do
+    case get_in(address_component, ["streetNumber", "number"]) do
+      nil -> nil
+      value when is_binary(value) -> value
+      value -> to_string(value)
+    end
+  end
+
+  defp extract_road(address_component) do
+    case get_in(address_component, ["streetNumber", "street"]) do
+      nil -> nil
+      value when is_binary(value) -> value
+      value -> to_string(value)
+    end
+  end
+
+  defp validate_address_fields(address) do
     required_fields = [:display_name, :osm_id, :osm_type, :latitude, :longitude, :raw]
     missing_fields = Enum.filter(required_fields, fn field ->
       value = Map.get(address, field)
@@ -306,11 +358,6 @@ defmodule TeslaMate.Locations.Geocoder do
     else
       {:ok, address}
     end
-  end
-
-  defp into_address(raw, _lat, _lon) do
-    Logger.warning("Failed to parse Amap API response", raw_response: raw)
-    {:error, {:geocoding_failed, "Invalid response format"}}
   end
 
   defp log_level(%Tesla.Env{} = env) when env.status >= 400, do: :warning
@@ -330,8 +377,6 @@ defmodule TeslaMate.Locations.Geocoder do
     end
   end
 
-
-
   # Use Amap coordinate conversion API
   defp convert_coordinates_with_amap(lng, lat) when is_number(lng) and is_number(lat) do
     opts = [
@@ -342,19 +387,7 @@ defmodule TeslaMate.Locations.Geocoder do
 
     case query("/v3/assistant/coordinate/convert", "zh", opts) do
       {:ok, %{"status" => "1", "locations" => locations}} ->
-        case String.split(locations, ",") do
-          [lng_str, lat_str] ->
-            case {Float.parse(lng_str), Float.parse(lat_str)} do
-              {{lng_float, _}, {lat_float, _}} ->
-                {:ok, {lng_float, lat_float}}
-              _ ->
-                Logger.error("Failed to parse converted coordinates", locations: locations)
-                {:error, "Invalid coordinate format"}
-            end
-          _ ->
-            Logger.error("Invalid coordinate conversion response", locations: locations)
-            {:error, "Invalid response format"}
-        end
+        parse_converted_coordinates(locations)
       
       {:ok, %{"status" => "0", "info" => reason}} ->
         Logger.error("Coordinate conversion API failed", reason: reason)
@@ -386,5 +419,19 @@ defmodule TeslaMate.Locations.Geocoder do
     {:error, :invalid_coordinates}
   end
 
-
+  defp parse_converted_coordinates(locations) do
+    case String.split(locations, ",") do
+      [lng_str, lat_str] ->
+        case {Float.parse(lng_str), Float.parse(lat_str)} do
+          {{lng_float, _}, {lat_float, _}} ->
+            {:ok, {lng_float, lat_float}}
+          _ ->
+            Logger.error("Failed to parse converted coordinates", locations: locations)
+            {:error, "Invalid coordinate format"}
+        end
+      _ ->
+        Logger.error("Invalid coordinate conversion response", locations: locations)
+        {:error, "Invalid response format"}
+    end
+  end
 end

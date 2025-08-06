@@ -24,79 +24,19 @@ defmodule TeslaMate.Email do
 
       email_address ->
         Logger.info("Attempting to send drive notification email to: #{email_address}", car_id: drive.car_id, drive_id: drive.id)
-        # Calculate avg_speed and energy consumption and add them to the drive struct
-        drive_with_calculations = case drive.duration_min do
-          duration when duration > 0 -> 
-            avg_speed = drive.distance / (duration / 60.0)
-            drive_with_speed = Map.put(drive, :avg_speed, avg_speed)
-            
-            # Calculate energy consumption if we have the required data
-            case {drive.start_rated_range_km, drive.end_rated_range_km, drive.distance, drive.car.efficiency} do
-              {start_range, end_range, distance, efficiency} when not is_nil(start_range) and not is_nil(end_range) and not is_nil(distance) and not is_nil(efficiency) ->
-                range_diff = (if is_struct(start_range, Decimal), do: Decimal.to_float(start_range), else: start_range) - 
-                             (if is_struct(end_range, Decimal), do: Decimal.to_float(end_range), else: end_range)
-                
-                {energy_consumption, energy_used} = if range_diff > 0 do
-                  energy_consumption = range_diff * efficiency * 1000 / distance
-                  energy_used = range_diff * efficiency
-                  {Float.round(energy_consumption, 1), Float.round(energy_used, 3)}
-                else
-                  energy_gained = abs(range_diff) * efficiency
-                  energy_consumption_gained = energy_gained * 1000 / distance
-                  {-Float.round(energy_consumption_gained, 1), -Float.round(energy_gained, 3)}
-                end
-                
-                drive_with_speed
-                |> Map.put(:energy_consumption_wh_per_km, energy_consumption)
-                |> Map.put(:energy_used_kwh, energy_used)
-              
-              _ ->
-                drive_with_speed
-                |> Map.put(:energy_consumption_wh_per_km, nil)
-                |> Map.put(:energy_used_kwh, nil)
-            end
-          _ -> 
-            Map.put(drive, :avg_speed, nil)
-            |> Map.put(:energy_consumption_wh_per_km, nil)
-            |> Map.put(:energy_used_kwh, nil)
-        end
         
+        # Simplified calculation logic
+        drive_with_calculations = calculate_drive_metrics(drive)
         drive = TeslaMate.Repo.preload(drive_with_calculations, [:car, :start_address, :end_address, :start_geofence, :end_geofence])
 
-        # Generate drive subject with location and stats
-        start_location = case {drive.start_geofence, drive.start_address} do
-          {geofence, address} when not is_nil(geofence) and not is_nil(address) ->
-            "#{geofence.name} (#{address.name})"
-          {nil, address} when not is_nil(address) ->
-            address.name
-          _ ->
-            "Unknown Location"
-        end
-        
-        end_location = case {drive.end_geofence, drive.end_address} do
-          {geofence, address} when not is_nil(geofence) and not is_nil(address) ->
-            "#{geofence.name} (#{address.name})"
-          {nil, address} when not is_nil(address) ->
-            address.name
-          _ ->
-            "Unknown Location"
-        end
-        
-        drive_time = TeslaMate.Email.format_datetime_local(drive.start_date)
-        drive_subject = "🚗 [#{drive_time}] #{start_location} → #{end_location} (#{Float.round(drive.distance, 1)}km, #{drive.duration_min}min)"
-        
-        # Get map generation info from Python service
-        map_info = case call_map_service(drive.id) do
-          {:ok, base64_image, map_info} -> Map.put(map_info, :image_base64, base64_image)
-          _ -> nil
-        end
+        # Generate email subject
+        drive_subject = generate_drive_subject(drive)
         
         email = %Swoosh.Email{
           from: {System.get_env("EMAIL_FROM_NAME", "TeslaMate"), System.get_env("SMTP_USERNAME")},
           to: [{"User", email_address}],
           subject: drive_subject,
-          html_body: TeslaMate.Email.Templates.DriveEmail.generate_html(drive, map_info),
-          text_body: TeslaMate.Email.Templates.DriveEmail.generate_text(drive, map_info)
+          html_body: TeslaMate.Email.Templates.DriveEmail.generate_html(drive)
         }
 
         smtp_config = get_smtp_config()
@@ -139,93 +79,19 @@ defmodule TeslaMate.Email do
 
       email_address ->
         Logger.info("Attempting to send charging notification email to: #{email_address}", car_id: charging_process.car_id, charging_process_id: charging_process.id)
-        # Calculate power_avg and cost_per_kwh and add them to the charging_process struct
-        charging_with_calculations = case {charging_process.charge_energy_added, charging_process.duration_min} do
-          {charge_energy_added, duration} when not is_nil(charge_energy_added) and not is_nil(duration) and duration > 0 -> 
-            try do
-              power_avg = charge_energy_added / (duration / 60.0)
-              charging_with_power = Map.put(charging_process, :power_avg, power_avg)
-              
-              # Calculate cost_per_kwh if cost and charge_energy_added are available
-              cost_per_kwh = case {charging_process.cost, charging_process.charge_energy_added} do
-                {cost, energy_added} when not is_nil(cost) and not is_nil(energy_added) ->
-                  try do
-                    if Decimal.equal?(energy_added, Decimal.new("0")) do
-                      nil
-                    else
-                      cost_per_kwh = Decimal.div(cost, energy_added)
-                      Logger.info("Charging cost_per_kwh calculation", cost: cost, energy_added: energy_added, cost_per_kwh: cost_per_kwh)
-                      Decimal.to_float(cost_per_kwh) |> Float.round(2)
-                    end
-                  rescue
-                    error ->
-                      Logger.error("Failed to calculate charging cost_per_kwh", error: error, cost: cost, energy_added: energy_added)
-                      nil
-                  end
-                _ -> nil
-              end
-              
-              Map.put(charging_with_power, :cost_per_kwh, cost_per_kwh)
-            rescue
-              ArithmeticError ->
-                Logger.warning("Failed to calculate power_avg due to arithmetic error", 
-                              charge_energy_added: charge_energy_added, duration: duration)
-                charging_with_power = Map.put(charging_process, :power_avg, nil)
-                
-                # Still try to calculate cost_per_kwh
-                cost_per_kwh = case {charging_process.cost, charging_process.charge_energy_added} do
-                  {cost, energy_added} when not is_nil(cost) and not is_nil(energy_added) ->
-                    try do
-                      if Decimal.equal?(energy_added, Decimal.new("0")) do
-                        nil
-                      else
-                        Decimal.div(cost, energy_added) |> Decimal.to_float() |> Float.round(2)
-                      end
-                    rescue
-                      _ -> nil
-                    end
-                  _ -> nil
-                end
-                
-                Map.put(charging_with_power, :cost_per_kwh, cost_per_kwh)
-            end
-          _ -> 
-            Logger.warning("Cannot calculate power_avg: missing or invalid data", 
-                          charge_energy_added: charging_process.charge_energy_added, 
-                          duration: charging_process.duration_min)
-            charging_with_power = Map.put(charging_process, :power_avg, nil)
-            
-            # Still try to calculate cost_per_kwh
-            cost_per_kwh = case {charging_process.cost, charging_process.charge_energy_added} do
-              {cost, energy_added} when not is_nil(cost) and not is_nil(energy_added) ->
-                try do
-                  if Decimal.equal?(energy_added, Decimal.new("0")) do
-                    nil
-                  else
-                    Decimal.div(cost, energy_added) |> Decimal.to_float() |> Float.round(2)
-                  end
-                rescue
-                  _ -> nil
-                end
-              _ -> nil
-            end
-            
-            Map.put(charging_with_power, :cost_per_kwh, cost_per_kwh)
-        end
         
+        # Simplified calculation logic
+        charging_with_calculations = calculate_charging_metrics(charging_process)
         charging_process = TeslaMate.Repo.preload(charging_with_calculations, [:car, :address, :geofence])
 
-        # Generate charging subject with location and stats
-        charging_location = if charging_process.geofence, do: "#{charging_process.geofence.name} (#{charging_process.address.name})", else: charging_process.address.name
-        charging_time = TeslaMate.Email.format_datetime_local(charging_process.start_date)
-        charging_subject = "🔋 [#{charging_time}] #{charging_location} (#{Float.round(charging_process.charge_energy_added, 1)}kWh, #{charging_process.duration_min}min)"
+        # Generate email subject
+        charging_subject = generate_charging_subject(charging_process)
         
         email = %Swoosh.Email{
           from: {System.get_env("EMAIL_FROM_NAME", "TeslaMate"), System.get_env("SMTP_USERNAME")},
           to: [{"User", email_address}],
           subject: charging_subject,
-          html_body: TeslaMate.Email.Templates.ChargingEmail.generate_html(charging_process),
-          text_body: TeslaMate.Email.Templates.ChargingEmail.generate_text(charging_process)
+          html_body: TeslaMate.Email.Templates.ChargingEmail.generate_html(charging_process)
         }
 
         smtp_config = get_smtp_config()
@@ -271,16 +137,15 @@ defmodule TeslaMate.Email do
         
         system_info = get_system_info()
         
-        # Generate startup subject with current time
-        startup_time = TeslaMate.Email.format_datetime_local(DateTime.utc_now())
+        # Generate startup email subject
+        startup_time = format_datetime_local(DateTime.utc_now())
         startup_subject = "🚀 [#{startup_time}] TeslaMate Service Started"
         
         email = %Swoosh.Email{
           from: {System.get_env("EMAIL_FROM_NAME", "TeslaMate"), System.get_env("SMTP_USERNAME")},
           to: [{"User", email_address}],
           subject: startup_subject,
-          html_body: TeslaMate.Email.Templates.StartupEmail.generate_html(system_info),
-          text_body: TeslaMate.Email.Templates.StartupEmail.generate_text(system_info)
+          html_body: TeslaMate.Email.Templates.StartupEmail.generate_html(system_info)
         }
 
         smtp_config = get_smtp_config()
@@ -373,41 +238,69 @@ defmodule TeslaMate.Email do
     end
   end
 
-  defp calculate_drive_metrics(drive_data) do
-    avg_speed = case {drive_data.distance, drive_data.duration_min} do
-      {distance, duration} when not is_nil(distance) and not is_nil(duration) and duration > 0 ->
-        Float.round(distance / (duration / 60.0), 1)
-      _ ->
-
-        nil
+  defp calculate_drive_metrics(drive) do
+    # Calculate average speed
+    avg_speed = if drive.distance && drive.duration_min && drive.duration_min > 0 do
+      drive.distance / (drive.duration_min / 60.0)
+    else
+      nil
     end
 
-    {energy_consumption, energy_used} = case {drive_data.start_rated_range_km, drive_data.end_rated_range_km, 
-                                              drive_data.distance, drive_data.efficiency} do
-      {start_range, end_range, distance, efficiency} 
-        when not is_nil(start_range) and not is_nil(end_range) and not is_nil(distance) and not is_nil(efficiency) ->
-        start_range_float = if is_struct(start_range, Decimal), do: Decimal.to_float(start_range), else: start_range
-        end_range_float = if is_struct(end_range, Decimal), do: Decimal.to_float(end_range), else: end_range
-        range_diff = start_range_float - end_range_float
-
-        if range_diff > 0 do
-          energy_consumption = range_diff * efficiency * 1000 / distance
-          energy_used = range_diff * efficiency
-          {Float.round(energy_consumption, 1), Float.round(energy_used, 3)}
+    # Calculate energy consumption
+    energy_consumption_wh_per_km = case {drive.start_rated_range_km, drive.end_rated_range_km, drive.car} do
+      {start_range, end_range, %{efficiency: efficiency}} when not is_nil(start_range) and not is_nil(end_range) and not is_nil(efficiency) ->
+        range_diff = (if is_struct(start_range, Decimal), do: Decimal.to_float(start_range), else: start_range) - 
+                     (if is_struct(end_range, Decimal), do: Decimal.to_float(end_range), else: end_range)
+        if range_diff > 0 and drive.distance && drive.distance > 0 do
+          range_diff * efficiency * 1000 / drive.distance
         else
-          energy_gained = abs(range_diff) * efficiency
-          energy_consumption_gained = energy_gained * 1000 / distance
-          {-Float.round(energy_consumption_gained, 1), -Float.round(energy_gained, 3)}
+          nil
         end
-      _ ->
-
-        {nil, nil}
+      _ -> nil
     end
 
-    %{
+    # Calculate energy used
+    energy_used_kwh = case {drive.start_rated_range_km, drive.end_rated_range_km, drive.car} do
+      {start_range, end_range, %{efficiency: efficiency}} when not is_nil(start_range) and not is_nil(end_range) and not is_nil(efficiency) ->
+        range_diff = (if is_struct(start_range, Decimal), do: Decimal.to_float(start_range), else: start_range) - 
+                     (if is_struct(end_range, Decimal), do: Decimal.to_float(end_range), else: end_range)
+        range_diff * efficiency
+      _ -> nil
+    end
+
+    # Get latest range
+    latest_range = get_latest_range(drive.car_id)
+
+    %{drive | 
       avg_speed: avg_speed,
-      energy_consumption_wh_per_km: energy_consumption,
-      energy_used_kwh: energy_used
+      energy_consumption_wh_per_km: energy_consumption_wh_per_km,
+      energy_used_kwh: energy_used_kwh,
+      latest_range: latest_range
+    }
+  end
+
+  defp calculate_charging_metrics(charging_process) do
+    # Calculate average power
+    power_avg = if charging_process.charge_energy_added && charging_process.duration_min && charging_process.duration_min > 0 do
+      charging_process.charge_energy_added / (charging_process.duration_min / 60.0)
+    else
+      nil
+    end
+
+    # Calculate cost per kWh
+    cost_per_kwh = case {charging_process.cost, charging_process.charge_energy_added} do
+      {cost, energy_added} when not is_nil(cost) and not is_nil(energy_added) and energy_added > 0 ->
+        if is_struct(cost, Decimal) and is_struct(energy_added, Decimal) do
+          Decimal.div(cost, energy_added)
+        else
+          cost / energy_added
+        end
+      _ -> nil
+    end
+
+    %{charging_process | 
+      power_avg: power_avg,
+      cost_per_kwh: cost_per_kwh
     }
   end
 
@@ -559,6 +452,37 @@ defmodule TeslaMate.Email do
     end
   end
 
+
+
+  defp generate_drive_subject(drive) do
+    start_location = case {drive.start_geofence, drive.start_address} do
+      {geofence, address} when not is_nil(geofence) and not is_nil(address) ->
+        "#{geofence.name} (#{address.name})"
+      {nil, address} when not is_nil(address) ->
+        address.name
+      _ ->
+        "Unknown Location"
+    end
+    
+    end_location = case {drive.end_geofence, drive.end_address} do
+      {geofence, address} when not is_nil(geofence) and not is_nil(address) ->
+        "#{geofence.name} (#{address.name})"
+      {nil, address} when not is_nil(address) ->
+        address.name
+      _ ->
+        "Unknown Location"
+    end
+    
+    drive_time = format_datetime_local(drive.start_date)
+    "🚗 [#{drive_time}] #{start_location} → #{end_location} (#{Float.round(drive.distance, 1)}km, #{drive.duration_min}min)"
+  end
+
+  defp generate_charging_subject(charging_process) do
+    charging_location = if charging_process.geofence, do: "#{charging_process.geofence.name} (#{charging_process.address.name})", else: charging_process.address.name
+    charging_time = format_datetime_local(charging_process.start_date)
+    "🔋 [#{charging_time}] #{charging_location} (#{Float.round(charging_process.charge_energy_added, 1)}kWh, #{charging_process.duration_min}min)"
+  end
+
   defp get_uptime() do
     case System.cmd("uptime", []) do
       {output, 0} -> String.trim(output)
@@ -569,12 +493,11 @@ defmodule TeslaMate.Email do
   def format_duration_minutes(minutes) when is_number(minutes) do
     hours = div(minutes, 60)
     remaining_minutes = rem(minutes, 60)
-    seconds = rem(round((minutes - trunc(minutes)) * 60), 60)
     
     cond do
-      hours > 0 -> "#{hours}h #{remaining_minutes}m #{seconds}s"
-      remaining_minutes > 0 -> "#{remaining_minutes}m #{seconds}s"
-      true -> "#{seconds}s"
+      hours > 0 -> "#{hours}h #{remaining_minutes}m"
+      remaining_minutes > 0 -> "#{remaining_minutes}m"
+      true -> "0m"
     end
   end
 
@@ -764,5 +687,7 @@ defmodule TeslaMate.Email do
 
       {:error, "Service call failed"}
   end
+
+
 
 end 
