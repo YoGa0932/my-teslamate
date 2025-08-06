@@ -189,18 +189,9 @@ defmodule TeslaMate.Email do
   end
 
   defp get_version() do
-    # Try to get version from Application spec first
-    case Application.spec(:teslamate, :vsn) do
-      nil -> 
-        # Fallback to reading VERSION file
-        case File.read("VERSION") do
-          {:ok, version} -> String.trim(version)
-          {:error, _reason} -> "Unknown"
-        end
-      version when is_binary(version) -> 
-        version
-      _ -> 
-        "Unknown"
+    case File.read("VERSION") do
+      {:ok, version} -> String.trim(version)
+      {:error, _reason} -> "0.0.0"
     end
   end
 

@@ -3,6 +3,8 @@ defmodule TeslaMate.Email.Templates.ChargingEmail.ChargingInfoFormatter do
   Charging information formatter
   """
 
+  alias TeslaMate.Email.Templates.Shared.CommonFormatter
+
   def format_charging_info(charging) do
     %{
       # Basic statistics
@@ -23,11 +25,12 @@ defmodule TeslaMate.Email.Templates.ChargingEmail.ChargingInfoFormatter do
       charging_location: format_charging_location(charging.geofence, charging.address),
       
       # Environment information
-      outside_temp: format_outside_temp(charging.outside_temp_avg),
+      outside_temp: CommonFormatter.format_temperature(charging.outside_temp_avg),
+      inside_temp: CommonFormatter.format_temperature(charging.inside_temp_avg),
       
       # Time information
-      start_time: format_datetime(charging.start_date),
-      end_time: format_datetime(charging.end_date)
+      start_time: CommonFormatter.format_datetime(charging.start_date),
+      end_time: CommonFormatter.format_datetime(charging.end_date)
     }
   end
 
@@ -35,7 +38,7 @@ defmodule TeslaMate.Email.Templates.ChargingEmail.ChargingInfoFormatter do
   defp format_energy_added(energy) when is_struct(energy, Decimal), do: "#{Decimal.to_float(energy)} kWh"
   defp format_energy_added(_), do: "N/A"
 
-  defp format_duration(duration) when is_number(duration), do: format_duration_minutes(duration)
+  defp format_duration(duration) when is_number(duration), do: CommonFormatter.format_duration_minutes(duration)
   defp format_duration(_), do: "N/A"
 
   defp format_charging_type(charging) do
@@ -126,26 +129,4 @@ defmodule TeslaMate.Email.Templates.ChargingEmail.ChargingInfoFormatter do
         "Unknown Location"
     end
   end
-
-  defp format_outside_temp(temp) when is_number(temp), do: "#{temp}°C"
-  defp format_outside_temp(temp) when is_struct(temp, Decimal), do: "#{Decimal.to_float(temp)}°C"
-  defp format_outside_temp(_), do: "N/A"
-
-  defp format_datetime(datetime) when not is_nil(datetime) do
-    local_datetime = DateTime.add(datetime, 8 * 60 * 60, :second)
-    Calendar.strftime(local_datetime, "%Y-%m-%d %H:%M:%S")
-  end
-  defp format_datetime(_), do: "N/A"
-
-  defp format_duration_minutes(minutes) when is_number(minutes) do
-    hours = div(minutes, 60)
-    remaining_minutes = rem(minutes, 60)
-    
-    cond do
-      hours > 0 -> "#{hours}h #{remaining_minutes}m"
-      remaining_minutes > 0 -> "#{remaining_minutes}m"
-      true -> "0m"
-    end
-  end
-  defp format_duration_minutes(_), do: "N/A"
 end 

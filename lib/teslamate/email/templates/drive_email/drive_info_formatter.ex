@@ -3,6 +3,8 @@ defmodule TeslaMate.Email.Templates.DriveEmail.DriveInfoFormatter do
   Drive information formatter
   """
 
+  alias TeslaMate.Email.Templates.Shared.CommonFormatter
+
   def format_drive_info(drive) do
     %{
       # Basic statistics
@@ -16,8 +18,8 @@ defmodule TeslaMate.Email.Templates.DriveEmail.DriveInfoFormatter do
       drive_cost: format_drive_cost(drive),
       
       # Time information
-      start_time: format_datetime(drive.start_date),
-      end_time: format_datetime(drive.end_date),
+      start_time: CommonFormatter.format_datetime(drive.start_date),
+      end_time: CommonFormatter.format_datetime(drive.end_date),
       
       # Route information
       route: format_route_info(drive),
@@ -39,15 +41,15 @@ defmodule TeslaMate.Email.Templates.DriveEmail.DriveInfoFormatter do
       descent: format_elevation(drive.descent),
       
       # Temperature information
-      outside_temp: format_temperature(drive.outside_temp_avg),
-      inside_temp: format_temperature(drive.inside_temp_avg)
+      outside_temp: CommonFormatter.format_temperature(drive.outside_temp_avg),
+      inside_temp: CommonFormatter.format_temperature(drive.inside_temp_avg)
     }
   end
 
   defp format_distance(distance) when is_number(distance), do: "#{Float.round(distance, 3)} km"
   defp format_distance(_), do: "N/A"
 
-  defp format_duration(duration) when is_number(duration), do: format_duration_minutes(duration)
+  defp format_duration(duration) when is_number(duration), do: CommonFormatter.format_duration_minutes(duration)
   defp format_duration(_), do: "N/A"
 
   defp format_speed(speed) when is_number(speed), do: "#{Float.round(speed * 1.0, 3)} km/h"
@@ -64,6 +66,7 @@ defmodule TeslaMate.Email.Templates.DriveEmail.DriveInfoFormatter do
 
   defp format_estimated_range(car_id) when not is_nil(car_id) do
     case get_latest_range(car_id) do
+      range when is_struct(range, Decimal) -> "#{Decimal.to_float(range)} km"
       range when is_number(range) -> "#{range} km"
       _ -> "N/A"
     end
@@ -76,12 +79,6 @@ defmodule TeslaMate.Email.Templates.DriveEmail.DriveInfoFormatter do
       _ -> "N/A"
     end
   end
-
-  defp format_datetime(datetime) when not is_nil(datetime) do
-    local_datetime = DateTime.add(datetime, 8 * 60 * 60, :second)
-    Calendar.strftime(local_datetime, "%Y-%m-%d %H:%M:%S")
-  end
-  defp format_datetime(_), do: "N/A"
 
   defp format_route_info(drive) do
     case {drive.start_geofence, drive.start_address} do
@@ -155,22 +152,6 @@ defmodule TeslaMate.Email.Templates.DriveEmail.DriveInfoFormatter do
 
   defp format_elevation(elevation) when is_number(elevation), do: "#{elevation} m"
   defp format_elevation(_), do: "N/A"
-
-  defp format_temperature(temp) when is_number(temp), do: "#{temp}°C"
-  defp format_temperature(temp) when is_struct(temp, Decimal), do: "#{Decimal.to_float(temp)}°C"
-  defp format_temperature(_), do: "N/A"
-
-  defp format_duration_minutes(minutes) when is_number(minutes) do
-    hours = div(minutes, 60)
-    remaining_minutes = rem(minutes, 60)
-    
-    cond do
-      hours > 0 -> "#{hours}h #{remaining_minutes}m"
-      remaining_minutes > 0 -> "#{remaining_minutes}m"
-      true -> "0m"
-    end
-  end
-  defp format_duration_minutes(_), do: "N/A"
 
   defp get_latest_range(car_id) do
     import Ecto.Query
