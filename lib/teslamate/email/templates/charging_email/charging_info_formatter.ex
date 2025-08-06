@@ -26,7 +26,6 @@ defmodule TeslaMate.Email.Templates.ChargingEmail.ChargingInfoFormatter do
       
       # Environment information
       outside_temp: CommonFormatter.format_temperature(charging.outside_temp_avg),
-      inside_temp: CommonFormatter.format_temperature(charging.inside_temp_avg),
       
       # Time information
       start_time: CommonFormatter.format_datetime(charging.start_date),
