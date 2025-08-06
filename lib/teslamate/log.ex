@@ -723,12 +723,18 @@ defmodule TeslaMate.Log do
   end
 
   def calculate_drive_cost(%Drive{} = drive) do
+    # Get efficiency from drive.car.efficiency
+    efficiency = case drive do
+      %{car: %{efficiency: eff}} -> eff
+      _ -> nil
+    end
+
     # Calculate energy used for driving (from range change)
-    energy_used_kwh = case {drive.start_rated_range_km, drive.end_rated_range_km, drive.car} do
-      {start_range, end_range, %{efficiency: efficiency}} when not is_nil(start_range) and not is_nil(end_range) and not is_nil(efficiency) ->
+    energy_used_kwh = case {drive.start_rated_range_km, drive.end_rated_range_km, efficiency} do
+      {start_range, end_range, eff} when not is_nil(start_range) and not is_nil(end_range) and not is_nil(eff) ->
         range_diff = (if is_struct(start_range, Decimal), do: Decimal.to_float(start_range), else: start_range) - 
                      (if is_struct(end_range, Decimal), do: Decimal.to_float(end_range), else: end_range)
-        range_diff * efficiency
+        range_diff * eff
       _ ->
         nil
     end

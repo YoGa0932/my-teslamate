@@ -189,52 +189,19 @@ defmodule TeslaMate.Email do
   end
 
   defp get_latest_drive() do
-    # Get latest drive record
-    query = """
-    SELECT d.*, c.efficiency
-    FROM drives d
-    JOIN cars c ON c.id = d.car_id
-    ORDER BY d.end_date DESC
-    LIMIT 1
-    """
-    
-    case Repo.query(query) do
-      {:ok, %{rows: [row]}} ->
-        columns = ["id", "start_date", "end_date", "outside_temp_avg", "speed_max", "power_max", "power_min", 
-                   "start_ideal_range_km", "end_ideal_range_km", "start_km", "end_km", "distance", 
-                   "duration_min", "car_id", "inside_temp_avg", "start_address_id", "end_address_id", 
-                   "start_rated_range_km", "end_rated_range_km", "start_position_id", "end_position_id",
-                   "start_geofence_id", "end_geofence_id", "ascent", "descent", "efficiency"]
-        
-        drive_data = Enum.zip_with(columns, row, fn field, value -> 
-          {String.to_atom(field), value}
-        end) |> Map.new()
-        
-        drive_with_calculations = calculate_drive_metrics(drive_data)
-        
-        drive_id = drive_data.id
-        Drive
-        |> where(id: ^drive_id)
-        |> Repo.one()
-        |> case do
-          nil -> 
-            Logger.warning("Latest drive record not found in database", drive_id: drive_id)
-            nil
-          drive -> 
-            drive
-            |> Repo.preload([:car, :start_address, :end_address, :start_geofence, :end_geofence])
-            |> Map.put(:avg_speed, drive_with_calculations.avg_speed)
-            |> Map.put(:energy_consumption_wh_per_km, drive_with_calculations.energy_consumption_wh_per_km)
-            |> Map.put(:energy_used_kwh, drive_with_calculations.energy_used_kwh)
-        end
-        
-      {:error, reason} ->
-        Logger.error("Failed to query latest drive record", error: reason)
-        nil
-        
-      _ -> 
+    # Get latest drive record with car information
+    Drive
+    |> order_by([d], desc: d.end_date)
+    |> limit(1)
+    |> Repo.one()
+    |> case do
+      nil -> 
         Logger.info("No drive records found")
         nil
+      drive -> 
+        drive
+        |> Repo.preload([:car, :start_address, :end_address, :start_geofence, :end_geofence])
+        |> calculate_drive_metrics()
     end
   end
 
@@ -246,13 +213,16 @@ defmodule TeslaMate.Email do
       nil
     end
 
+    # Get efficiency from drive.car.efficiency
+    efficiency = drive.car.efficiency
+
     # Calculate energy consumption
-    energy_consumption_wh_per_km = case {drive.start_rated_range_km, drive.end_rated_range_km, drive.car} do
-      {start_range, end_range, %{efficiency: efficiency}} when not is_nil(start_range) and not is_nil(end_range) and not is_nil(efficiency) ->
+    energy_consumption_wh_per_km = case {drive.start_rated_range_km, drive.end_rated_range_km, efficiency} do
+      {start_range, end_range, eff} when not is_nil(start_range) and not is_nil(end_range) and not is_nil(eff) ->
         range_diff = (if is_struct(start_range, Decimal), do: Decimal.to_float(start_range), else: start_range) - 
                      (if is_struct(end_range, Decimal), do: Decimal.to_float(end_range), else: end_range)
         if range_diff > 0 and drive.distance && drive.distance > 0 do
-          range_diff * efficiency * 1000 / drive.distance
+          range_diff * eff * 1000 / drive.distance
         else
           nil
         end
@@ -260,11 +230,11 @@ defmodule TeslaMate.Email do
     end
 
     # Calculate energy used
-    energy_used_kwh = case {drive.start_rated_range_km, drive.end_rated_range_km, drive.car} do
-      {start_range, end_range, %{efficiency: efficiency}} when not is_nil(start_range) and not is_nil(end_range) and not is_nil(efficiency) ->
+    energy_used_kwh = case {drive.start_rated_range_km, drive.end_rated_range_km, efficiency} do
+      {start_range, end_range, eff} when not is_nil(start_range) and not is_nil(end_range) and not is_nil(eff) ->
         range_diff = (if is_struct(start_range, Decimal), do: Decimal.to_float(start_range), else: start_range) - 
                      (if is_struct(end_range, Decimal), do: Decimal.to_float(end_range), else: end_range)
-        range_diff * efficiency
+        range_diff * eff
       _ -> nil
     end
 
@@ -380,75 +350,19 @@ defmodule TeslaMate.Email do
   end
 
   defp get_latest_charging() do
-    query = """
-    SELECT 
-      cp.*,
-      CASE 
-        WHEN cp.duration_min > 0 THEN cp.charge_energy_added / (cp.duration_min / 60.0)
-        ELSE NULL 
-      END as power_avg
-    FROM charging_processes cp
-    ORDER BY cp.end_date DESC
-    LIMIT 1
-    """
-    
-    case Repo.query(query) do
-      {:ok, %{rows: [row]}} ->
-        # Convert row to struct with calculated power_avg
-        charging_data = Enum.zip_with(
-          ["id", "car_id", "start_date", "end_date", "charge_energy_added", "charge_energy_used",
-           "start_ideal_range_km", "end_ideal_range_km", "start_rated_range_km", "end_rated_range_km",
-           "start_battery_level", "end_battery_level", "duration_min", "outside_temp_avg", "cost",
-           "position_id", "address_id", "geofence_id", "power_avg"],
-          row,
-          fn field, value -> 
-            case field do
-              "power_avg" -> 
-                case value do
-                  %Decimal{} -> {String.to_atom(field), Decimal.to_float(value)}
-                  value when is_number(value) -> {String.to_atom(field), value}
-                  _ -> {String.to_atom(field), nil}
-                end
-              _ -> {String.to_atom(field), value}
-            end
-          end
-        ) |> Map.new()
-        
-        # Preload associations
-        charging_id = charging_data.id
-        ChargingProcess
-        |> where(id: ^charging_id)
-        |> Repo.one()
-        |> case do
-          nil -> nil
-          charging -> 
-            # Calculate cost_per_kwh if cost and charge_energy_added are available
-            cost_per_kwh = case {charging.cost, charging.charge_energy_added} do
-              {cost, energy_added} when not is_nil(cost) and not is_nil(energy_added) ->
-                try do
-                  if Decimal.equal?(energy_added, Decimal.new("0")) do
-                    nil
-                  else
-                    cost_per_kwh = Decimal.div(cost, energy_added)
-                    cost_per_kwh_float = Decimal.to_float(cost_per_kwh) |> Float.round(2)
-                    Logger.info("Calculated cost_per_kwh", cost: cost, energy_added: energy_added, cost_per_kwh: cost_per_kwh, cost_per_kwh_float: cost_per_kwh_float, cost_type: (if is_struct(cost, Decimal), do: "Decimal", else: "Float"), energy_type: (if is_struct(energy_added, Decimal), do: "Decimal", else: "Float"))
-                    cost_per_kwh_float
-                  end
-                rescue
-                  error ->
-                    Logger.error("Failed to calculate cost_per_kwh", error: error, cost: cost, energy_added: energy_added)
-                    nil
-                end
-              _ -> nil
-            end
-            
-            charging
-            |> Repo.preload([:car, :address, :geofence])
-            |> Map.put(:power_avg, charging_data.power_avg)
-            |> Map.put(:cost_per_kwh, cost_per_kwh)
-        end
-        
-      _ -> nil
+    # Get latest charging process with associations
+    ChargingProcess
+    |> order_by([cp], desc: cp.end_date)
+    |> limit(1)
+    |> Repo.one()
+    |> case do
+      nil -> 
+        Logger.info("No charging records found")
+        nil
+      charging -> 
+        charging
+        |> Repo.preload([:car, :address, :geofence])
+        |> calculate_charging_metrics()
     end
   end
 
