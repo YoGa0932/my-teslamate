@@ -46,15 +46,15 @@ defmodule TeslaMate.Email.Templates.DriveEmail.DriveInfoFormatter do
   defp format_duration(duration) when is_number(duration), do: format_duration_minutes(duration)
   defp format_duration(_), do: "N/A"
 
-  defp format_speed(speed) when is_number(speed), do: "#{Float.round(speed, 3)} km/h"
+  defp format_speed(speed) when is_number(speed), do: "#{Float.round(speed * 1.0, 3)} km/h"
   defp format_speed(speed) when is_struct(speed, Decimal), do: "#{Float.round(Decimal.to_float(speed), 3)} km/h"
   defp format_speed(_), do: "N/A"
 
-  defp format_energy_consumption(consumption) when is_number(consumption), do: "#{Float.round(consumption, 1)} Wh/km"
+  defp format_energy_consumption(consumption) when is_number(consumption), do: "#{Float.round(consumption * 1.0, 1)} Wh/km"
   defp format_energy_consumption(consumption) when is_struct(consumption, Decimal), do: "#{Float.round(Decimal.to_float(consumption), 1)} Wh/km"
   defp format_energy_consumption(_), do: "N/A"
 
-  defp format_energy_used(energy) when is_number(energy), do: "#{Float.round(energy, 3)} kWh"
+  defp format_energy_used(energy) when is_number(energy), do: "#{Float.round(energy * 1.0, 3)} kWh"
   defp format_energy_used(energy) when is_struct(energy, Decimal), do: "#{Float.round(Decimal.to_float(energy), 3)} kWh"
   defp format_energy_used(_), do: "N/A"
 
@@ -127,7 +127,7 @@ defmodule TeslaMate.Email.Templates.DriveEmail.DriveInfoFormatter do
   defp format_power(power) when is_number(power), do: "#{power} kW"
   defp format_power(_), do: "N/A"
 
-  defp format_odometer(km) when is_number(km), do: "#{Float.round(km, 3)}"
+  defp format_odometer(km) when is_number(km), do: "#{Float.round(km * 1.0, 3)}"
   defp format_odometer(km) when is_struct(km, Decimal), do: "#{Float.round(Decimal.to_float(km), 3)}"
   defp format_odometer(_), do: "N/A"
 
