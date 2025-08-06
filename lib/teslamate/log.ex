@@ -758,6 +758,46 @@ defmodule TeslaMate.Log do
     end
   end
 
+  def calculate_projected_range(%Drive{} = drive) do
+    # Get efficiency from drive.car.efficiency
+    efficiency = case drive do
+      %{car: %{efficiency: eff}} -> eff
+      _ -> nil
+    end
+
+    # Get current battery level and rated range
+    current_battery_level = case drive do
+      %{end_position: %{battery_level: level}} when not is_nil(level) -> level
+      %{end_position: %{usable_battery_level: level}} when not is_nil(level) -> level
+      _ -> nil
+    end
+
+    current_rated_range = case drive do
+      %{end_rated_range_km: range} when not is_nil(range) -> range
+      _ -> nil
+    end
+
+    case {current_battery_level, current_rated_range, efficiency} do
+      {battery_level, rated_range, eff} when not is_nil(battery_level) and not is_nil(rated_range) and not is_nil(eff) ->
+        # Convert to float if needed
+        battery_float = if is_struct(battery_level, Decimal), do: Decimal.to_float(battery_level), else: battery_level
+        rated_float = if is_struct(rated_range, Decimal), do: Decimal.to_float(rated_range), else: rated_range
+        
+        # Calculate projected range based on current efficiency
+        # Formula: (rated_range / battery_level) * 100 * efficiency_factor
+        if battery_float > 0 do
+          base_range = (rated_float / battery_float) * 100
+          # Apply efficiency factor (assuming efficiency represents energy efficiency)
+          projected_range = base_range * eff
+          Float.round(projected_range, 1)
+        else
+          nil
+        end
+      _ ->
+        nil
+    end
+  end
+
   defp get_last_charging_cost_per_kwh(car_id) do
     # Get last charging price information
     query = """

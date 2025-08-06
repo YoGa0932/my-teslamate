@@ -213,10 +213,18 @@ defmodule TeslaMate.Email do
   end
 
   defp calculate_drive_metrics(drive) do
-    # Calculate average speed
-    avg_speed = if drive.distance && drive.duration_min && drive.duration_min > 0 do
+    # Calculate precise duration in seconds
+    precise_duration_seconds = case {drive.start_date, drive.end_date} do
+      {start_date, end_date} when not is_nil(start_date) and not is_nil(end_date) ->
+        DateTime.diff(end_date, start_date, :second)
+      _ -> nil
+    end
+
+    # Calculate average speed using precise duration
+    avg_speed = if drive.distance && precise_duration_seconds && precise_duration_seconds > 0 do
       distance_float = if is_struct(drive.distance, Decimal), do: Decimal.to_float(drive.distance), else: drive.distance
-      result = distance_float / (drive.duration_min / 60.0)
+      duration_hours = precise_duration_seconds / 3600.0
+      result = distance_float / duration_hours
       # Ensure result is float
       if is_integer(result), do: result * 1.0, else: result
     else
@@ -255,13 +263,38 @@ defmodule TeslaMate.Email do
       _ -> nil
     end
 
+    # Calculate efficiency ratio (distance / range_diff)
+    efficiency_ratio = case {drive.distance, drive.start_rated_range_km, drive.end_rated_range_km} do
+      {distance, start_range, end_range} when not is_nil(distance) and not is_nil(start_range) and not is_nil(end_range) ->
+        distance_float = if is_struct(distance, Decimal), do: Decimal.to_float(distance), else: distance
+        start_float = Decimal.to_float(start_range)
+        end_float = Decimal.to_float(end_range)
+        range_diff = start_float - end_float
+        if range_diff > 0 do
+          result = distance_float / range_diff
+          # Ensure result is float
+          if is_integer(result), do: result * 1.0, else: result
+        else
+          nil
+        end
+      _ -> nil
+    end
+
+    # Calculate since last charge metrics
+    since_last_charge_metrics = calculate_since_last_charge_metrics(drive)
+
     # Get latest range
     latest_range = get_latest_range(drive.car_id)
 
     drive
     |> Map.put(:avg_speed, avg_speed)
+    |> Map.put(:precise_duration_seconds, precise_duration_seconds)
     |> Map.put(:energy_consumption_wh_per_km, energy_consumption_wh_per_km)
     |> Map.put(:energy_used_kwh, energy_used_kwh)
+    |> Map.put(:efficiency_ratio, efficiency_ratio)
+    |> Map.put(:since_last_charge_energy, since_last_charge_metrics.energy)
+    |> Map.put(:since_last_charge_distance, since_last_charge_metrics.distance)
+    |> Map.put(:since_last_charge_avg_consumption, since_last_charge_metrics.avg_consumption)
     |> Map.put(:latest_range, latest_range)
   end
 
@@ -290,6 +323,58 @@ defmodule TeslaMate.Email do
     charging_process
     |> Map.put(:power_avg, power_avg)
     |> Map.put(:cost_per_kwh, cost_per_kwh)
+  end
+
+  defp calculate_since_last_charge_metrics(drive) do
+    import Ecto.Query
+    
+    # Find the last completed charging process before this drive
+    last_charge_query = from cp in TeslaMate.Log.ChargingProcess,
+      where: cp.car_id == ^drive.car_id and 
+             not is_nil(cp.end_date) and 
+             cp.end_date < ^drive.start_date,
+      order_by: [desc: cp.end_date],
+      limit: 1,
+      select: cp.end_date
+
+    case Repo.one(last_charge_query) do
+      last_charge_date when not is_nil(last_charge_date) ->
+        # Calculate metrics since last charge
+        since_last_charge_query = from d in TeslaMate.Log.Drive,
+          where: d.car_id == ^drive.car_id and 
+                 d.start_date >= ^last_charge_date and 
+                 d.end_date <= ^drive.end_date,
+          select: %{
+            total_energy: sum(d.start_rated_range_km - d.end_rated_range_km),
+            total_distance: sum(d.distance)
+          }
+
+        case Repo.one(since_last_charge_query) do
+          %{total_energy: total_energy, total_distance: total_distance} when not is_nil(total_energy) and not is_nil(total_distance) ->
+            energy_float = if is_struct(total_energy, Decimal), do: Decimal.to_float(total_energy), else: total_energy
+            distance_float = if is_struct(total_distance, Decimal), do: Decimal.to_float(total_distance), else: total_distance
+            
+            # Calculate energy used (kWh)
+            energy_used = energy_float * drive.car.efficiency
+            
+            # Calculate average consumption (Wh/km)
+            avg_consumption = if distance_float > 0 do
+              energy_used * 1000 / distance_float
+            else
+              nil
+            end
+
+            %{
+              energy: energy_used,
+              distance: distance_float,
+              avg_consumption: avg_consumption
+            }
+          _ ->
+            %{energy: nil, distance: nil, avg_consumption: nil}
+        end
+      _ ->
+        %{energy: nil, distance: nil, avg_consumption: nil}
+    end
   end
 
   def get_range_analysis(start_rated_range, end_rated_range, actual_distance) do

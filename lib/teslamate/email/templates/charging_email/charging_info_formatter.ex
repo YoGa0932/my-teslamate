@@ -3,7 +3,7 @@ defmodule TeslaMate.Email.Templates.ChargingEmail.ChargingInfoFormatter do
   Charging information formatter
   """
 
-  alias TeslaMate.Email.Templates.Shared.CommonFormatter
+  alias TeslaMate.Email.Templates.Utils.CommonFormatter
 
   def format_charging_info(charging) do
     %{

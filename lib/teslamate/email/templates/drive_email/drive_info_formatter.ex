@@ -3,18 +3,20 @@ defmodule TeslaMate.Email.Templates.DriveEmail.DriveInfoFormatter do
   Drive information formatter
   """
 
-  alias TeslaMate.Email.Templates.Shared.CommonFormatter
+  alias TeslaMate.Email.Templates.Utils.CommonFormatter
 
   def format_drive_info(drive) do
     %{
       # Basic statistics
       distance: format_distance(drive.distance),
-      duration: format_duration(drive.duration_min),
+      duration: format_precise_duration(drive.precise_duration_seconds),
       speed_max: format_speed(drive.speed_max),
       avg_speed: format_speed(drive.avg_speed),
       energy_consumption: format_energy_consumption(drive.energy_consumption_wh_per_km),
       energy_used: format_energy_used(drive.energy_used_kwh),
+      efficiency_ratio: format_efficiency_ratio(drive.efficiency_ratio),
       estimated_range: format_estimated_range(drive.car_id),
+      projected_range: format_projected_range(drive),
       drive_cost: format_drive_cost(drive),
       
       # Time information
@@ -42,15 +44,34 @@ defmodule TeslaMate.Email.Templates.DriveEmail.DriveInfoFormatter do
       
       # Temperature information
       outside_temp: CommonFormatter.format_temperature(drive.outside_temp_avg),
-      inside_temp: CommonFormatter.format_temperature(drive.inside_temp_avg)
+      inside_temp: CommonFormatter.format_temperature(drive.inside_temp_avg),
+      
+      # Since last charge information
+      since_last_charge_energy: format_since_last_charge_energy(drive.since_last_charge_energy),
+      since_last_charge_distance: format_since_last_charge_distance(drive.since_last_charge_distance),
+      since_last_charge_avg_consumption: format_since_last_charge_avg_consumption(drive.since_last_charge_avg_consumption)
     }
   end
 
   defp format_distance(distance) when is_number(distance), do: "#{Float.round(distance, 3)} km"
   defp format_distance(_), do: "N/A"
 
-  defp format_duration(duration) when is_number(duration), do: CommonFormatter.format_duration_minutes(duration)
-  defp format_duration(_), do: "N/A"
+
+
+  defp format_precise_duration(seconds) when is_number(seconds) and seconds > 0 do
+    hours = div(seconds, 3600)
+    remaining_seconds = rem(seconds, 3600)
+    minutes = div(remaining_seconds, 60)
+    final_seconds = rem(remaining_seconds, 60)
+    
+    cond do
+      hours > 0 -> "#{hours}h #{minutes}m #{final_seconds}s"
+      minutes > 0 -> "#{minutes}m #{final_seconds}s"
+      final_seconds > 0 -> "#{final_seconds}s"
+      true -> "0s"
+    end
+  end
+  defp format_precise_duration(_), do: "N/A"
 
   defp format_speed(speed) when is_number(speed), do: "#{Float.round(speed * 1.0, 3)} km/h"
   defp format_speed(speed) when is_struct(speed, Decimal), do: "#{Float.round(Decimal.to_float(speed), 3)} km/h"
@@ -64,6 +85,22 @@ defmodule TeslaMate.Email.Templates.DriveEmail.DriveInfoFormatter do
   defp format_energy_used(energy) when is_struct(energy, Decimal), do: "#{Float.round(Decimal.to_float(energy), 3)} kWh"
   defp format_energy_used(_), do: "N/A"
 
+  defp format_efficiency_ratio(ratio) when is_number(ratio), do: "#{Float.round(ratio * 1.0, 3)}"
+  defp format_efficiency_ratio(ratio) when is_struct(ratio, Decimal), do: "#{Float.round(Decimal.to_float(ratio), 3)}"
+  defp format_efficiency_ratio(_), do: "N/A"
+
+  defp format_since_last_charge_energy(energy) when is_number(energy), do: "#{Float.round(energy * 1.0, 3)} kWh"
+  defp format_since_last_charge_energy(energy) when is_struct(energy, Decimal), do: "#{Float.round(Decimal.to_float(energy), 3)} kWh"
+  defp format_since_last_charge_energy(_), do: "N/A"
+
+  defp format_since_last_charge_distance(distance) when is_number(distance), do: "#{Float.round(distance * 1.0, 3)} km"
+  defp format_since_last_charge_distance(distance) when is_struct(distance, Decimal), do: "#{Float.round(Decimal.to_float(distance), 3)} km"
+  defp format_since_last_charge_distance(_), do: "N/A"
+
+  defp format_since_last_charge_avg_consumption(consumption) when is_number(consumption), do: "#{Float.round(consumption * 1.0, 1)} Wh/km"
+  defp format_since_last_charge_avg_consumption(consumption) when is_struct(consumption, Decimal), do: "#{Float.round(Decimal.to_float(consumption), 1)} Wh/km"
+  defp format_since_last_charge_avg_consumption(_), do: "N/A"
+
   defp format_estimated_range(car_id) when not is_nil(car_id) do
     case get_latest_range(car_id) do
       range when is_struct(range, Decimal) -> "#{Decimal.to_float(range)} km"
@@ -72,6 +109,13 @@ defmodule TeslaMate.Email.Templates.DriveEmail.DriveInfoFormatter do
     end
   end
   defp format_estimated_range(_), do: "N/A"
+
+  defp format_projected_range(drive) do
+    case TeslaMate.Log.calculate_projected_range(drive) do
+      range when is_number(range) -> "#{range} km"
+      _ -> "N/A"
+    end
+  end
 
   defp format_drive_cost(drive) do
     case TeslaMate.Log.calculate_drive_cost(drive) do
@@ -118,15 +162,25 @@ defmodule TeslaMate.Email.Templates.DriveEmail.DriveInfoFormatter do
         
         efficiency_diff = range_consumed - actual_float
         
-        percentage = if start_float > 0, do: (range_consumed / start_float) * 100, else: 0
+        # Calculate over/under consumption percentage relative to actual distance
+        # This shows what percentage of extra range was consumed compared to actual distance
+        over_under_percentage = if actual_float > 0 do
+          case efficiency_diff do
+            diff when diff > 0 -> (diff / actual_float) * 100  # Over-consumed percentage
+            diff when diff < 0 -> (abs(diff) / actual_float) * 100  # Under-consumed percentage
+            _ -> 0
+          end
+        else
+          0
+        end
         
         cond do
           efficiency_diff > 0 ->
-            "🔋 #{Float.round(range_consumed, 1)}km (over-consumed #{Float.round(efficiency_diff, 1)}km, #{Float.round(percentage, 1)}%)"
+            "🔋 #{Float.round(range_consumed, 1)}km (over-consumed #{Float.round(efficiency_diff, 1)}km, +#{Float.round(over_under_percentage, 1)}%)"
           efficiency_diff < 0 ->
-            "🔋 #{Float.round(range_consumed, 1)}km (under-consumed #{Float.round(abs(efficiency_diff), 1)}km, #{Float.round(percentage, 1)}%)"
+            "🔋 #{Float.round(range_consumed, 1)}km (under-consumed #{Float.round(abs(efficiency_diff), 1)}km, -#{Float.round(over_under_percentage, 1)}%)"
           true ->
-            "🔋 #{Float.round(range_consumed, 1)}km (no difference, #{Float.round(percentage, 1)}%)"
+            "🔋 #{Float.round(range_consumed, 1)}km (no difference, 0%)"
         end
     end
   end

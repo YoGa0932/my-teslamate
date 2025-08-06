@@ -1,4 +1,4 @@
-defmodule TeslaMate.Email.Templates.Shared.CommonFormatter do
+defmodule TeslaMate.Email.Templates.Utils.CommonFormatter do
   @moduledoc """
   Common formatter for shared fields across email templates
   """
