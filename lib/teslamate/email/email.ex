@@ -241,12 +241,11 @@ defmodule TeslaMate.Email do
     # Get latest range
     latest_range = get_latest_range(drive.car_id)
 
-    %{drive | 
-      avg_speed: avg_speed,
-      energy_consumption_wh_per_km: energy_consumption_wh_per_km,
-      energy_used_kwh: energy_used_kwh,
-      latest_range: latest_range
-    }
+    drive
+    |> Map.put(:avg_speed, avg_speed)
+    |> Map.put(:energy_consumption_wh_per_km, energy_consumption_wh_per_km)
+    |> Map.put(:energy_used_kwh, energy_used_kwh)
+    |> Map.put(:latest_range, latest_range)
   end
 
   defp calculate_charging_metrics(charging_process) do
@@ -268,10 +267,9 @@ defmodule TeslaMate.Email do
       _ -> nil
     end
 
-    %{charging_process | 
-      power_avg: power_avg,
-      cost_per_kwh: cost_per_kwh
-    }
+    charging_process
+    |> Map.put(:power_avg, power_avg)
+    |> Map.put(:cost_per_kwh, cost_per_kwh)
   end
 
   def get_range_analysis(start_rated_range, end_rated_range, actual_distance) do
