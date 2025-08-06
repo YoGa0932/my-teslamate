@@ -225,7 +225,9 @@ defmodule TeslaMate.Email do
     # Calculate average speed
     avg_speed = if drive.distance && drive.duration_min && drive.duration_min > 0 do
       distance_float = if is_struct(drive.distance, Decimal), do: Decimal.to_float(drive.distance), else: drive.distance
-      distance_float / (drive.duration_min / 60.0)
+      result = distance_float / (drive.duration_min / 60.0)
+      # Ensure result is float
+      if is_integer(result), do: result * 1.0, else: result
     else
       nil
     end
@@ -242,7 +244,9 @@ defmodule TeslaMate.Email do
         range_diff = start_float - end_float
         distance_float = if is_struct(drive.distance, Decimal), do: Decimal.to_float(drive.distance), else: drive.distance
         if range_diff > 0 and distance_float > 0 do
-          range_diff * eff * 1000 / distance_float
+          result = range_diff * eff * 1000 / distance_float
+          # Ensure result is float
+          if is_integer(result), do: result * 1.0, else: result
         else
           nil
         end
