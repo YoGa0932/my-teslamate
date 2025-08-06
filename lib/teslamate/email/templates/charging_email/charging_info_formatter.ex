@@ -8,9 +8,9 @@ defmodule TeslaMate.Email.Templates.ChargingEmail.ChargingInfoFormatter do
       # Basic statistics
       energy_added: format_energy_added(charging.charge_energy_added),
       duration: format_duration(charging.duration_min),
-      charging_type: format_charging_type(charging.charge_port_type),
+      charging_type: format_charging_type(charging),
       total_cost: format_total_cost(charging),
-      power_avg: format_power_avg(charging.charge_port_power),
+      power_avg: format_power_avg(charging.power_avg),
       energy_used: format_energy_used(charging.charge_energy_used),
       efficiency: format_efficiency(charging.charge_energy_added, charging.charge_energy_used),
       cost_per_kwh: format_cost_per_kwh(charging),
@@ -37,11 +37,11 @@ defmodule TeslaMate.Email.Templates.ChargingEmail.ChargingInfoFormatter do
   defp format_duration(duration) when is_number(duration), do: format_duration_minutes(duration)
   defp format_duration(_), do: "N/A"
 
-  defp format_charging_type(port_type) do
-    case port_type do
-      "Type 1" -> "Type 1"
-      "Type 2" -> "Type 2"
-      "Type 3" -> "Type 3"
+  defp format_charging_type(charging) do
+    # Use TeslaMate's standard method to determine charging type
+    case TeslaMate.Log.determine_charging_type(charging) do
+      "DC" -> "DC Fast Charging"
+      "AC" -> "AC Charging"
       _ -> "Unknown"
     end
   end
