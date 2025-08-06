@@ -47,12 +47,15 @@ defmodule TeslaMate.Email.Templates.DriveEmail.DriveInfoFormatter do
   defp format_duration(_), do: "N/A"
 
   defp format_speed(speed) when is_number(speed), do: "#{Float.round(speed, 3)} km/h"
+  defp format_speed(speed) when is_struct(speed, Decimal), do: "#{Float.round(Decimal.to_float(speed), 3)} km/h"
   defp format_speed(_), do: "N/A"
 
   defp format_energy_consumption(consumption) when is_number(consumption), do: "#{Float.round(consumption, 1)} Wh/km"
+  defp format_energy_consumption(consumption) when is_struct(consumption, Decimal), do: "#{Float.round(Decimal.to_float(consumption), 1)} Wh/km"
   defp format_energy_consumption(_), do: "N/A"
 
   defp format_energy_used(energy) when is_number(energy), do: "#{Float.round(energy, 3)} kWh"
+  defp format_energy_used(energy) when is_struct(energy, Decimal), do: "#{Float.round(Decimal.to_float(energy), 3)} kWh"
   defp format_energy_used(_), do: "N/A"
 
   defp format_estimated_range(car_id) when not is_nil(car_id) do
@@ -125,10 +128,17 @@ defmodule TeslaMate.Email.Templates.DriveEmail.DriveInfoFormatter do
   defp format_power(_), do: "N/A"
 
   defp format_odometer(km) when is_number(km), do: "#{Float.round(km, 3)}"
+  defp format_odometer(km) when is_struct(km, Decimal), do: "#{Float.round(Decimal.to_float(km), 3)}"
   defp format_odometer(_), do: "N/A"
 
   defp format_odometer_change(start_km, end_km) when is_number(start_km) and is_number(end_km) do
     change = end_km - start_km
+    "#{format_odometer(start_km)} → #{format_odometer(end_km)} (+#{Float.round(change, 3)} km)"
+  end
+  defp format_odometer_change(start_km, end_km) when is_struct(start_km, Decimal) and is_struct(end_km, Decimal) do
+    start_float = Decimal.to_float(start_km)
+    end_float = Decimal.to_float(end_km)
+    change = end_float - start_float
     "#{format_odometer(start_km)} → #{format_odometer(end_km)} (+#{Float.round(change, 3)} km)"
   end
   defp format_odometer_change(_, _), do: "N/A"
