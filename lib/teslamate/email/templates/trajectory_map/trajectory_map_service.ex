@@ -49,9 +49,9 @@ defmodule TeslaMate.Email.Templates.TrajectoryMap.TrajectoryMapService do
     ]) do
       {:ok, %Finch.Response{status: 200, body: response_body}} ->
         case Jason.decode(response_body) do
-          {:ok, %{"image" => base64_image, "map_info" => map_info}} ->
+          {:ok, %{"image_base64" => base64_image, "map_info" => map_info}} ->
             {:ok, base64_image, map_info}
-          {:ok, %{"image" => base64_image}} ->
+          {:ok, %{"image_base64" => base64_image}} ->
             {:ok, base64_image, %{}}
           {:error, _reason} ->
             Logger.warning("Failed to parse map service response", drive_id: drive_id)
