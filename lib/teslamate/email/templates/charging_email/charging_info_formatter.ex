@@ -49,9 +49,11 @@ defmodule TeslaMate.Email.Templates.ChargingEmail.ChargingInfoFormatter do
   defp format_total_cost(charging_process) do
     cond do
       charging_process.cost ->
-        "¥#{Float.round(charging_process.cost, 2)}"
+        cost_float = if is_struct(charging_process.cost, Decimal), do: Decimal.to_float(charging_process.cost), else: charging_process.cost
+        "¥#{Float.round(cost_float, 2)}"
       charging_process.charge_energy_added ->
-        "¥#{Float.round(charging_process.charge_energy_added * 1.0, 2)}"
+        energy_float = if is_struct(charging_process.charge_energy_added, Decimal), do: Decimal.to_float(charging_process.charge_energy_added), else: charging_process.charge_energy_added
+        "¥#{Float.round(energy_float * 1.0, 2)}"
       true ->
         "N/A"
     end

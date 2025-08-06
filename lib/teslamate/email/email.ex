@@ -395,13 +395,15 @@ defmodule TeslaMate.Email do
     end
     
     drive_time = format_datetime_local(drive.start_date)
-    "🚗 [#{drive_time}] #{start_location} → #{end_location} (#{Float.round(drive.distance, 1)}km, #{drive.duration_min}min)"
+    distance_float = if is_struct(drive.distance, Decimal), do: Decimal.to_float(drive.distance), else: drive.distance
+    "🚗 [#{drive_time}] #{start_location} → #{end_location} (#{Float.round(distance_float, 1)}km, #{drive.duration_min}min)"
   end
 
   defp generate_charging_subject(charging_process) do
     charging_location = if charging_process.geofence, do: "#{charging_process.geofence.name} (#{charging_process.address.name})", else: charging_process.address.name
     charging_time = format_datetime_local(charging_process.start_date)
-    "🔋 [#{charging_time}] #{charging_location} (#{Float.round(charging_process.charge_energy_added, 1)}kWh, #{charging_process.duration_min}min)"
+    energy_float = if is_struct(charging_process.charge_energy_added, Decimal), do: Decimal.to_float(charging_process.charge_energy_added), else: charging_process.charge_energy_added
+    "🔋 [#{charging_time}] #{charging_location} (#{Float.round(energy_float, 1)}kWh, #{charging_process.duration_min}min)"
   end
 
   defp get_uptime() do
