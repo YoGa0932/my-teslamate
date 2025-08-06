@@ -175,7 +175,7 @@ defmodule TeslaMate.Email do
 
   defp get_system_info() do
     %{
-      version: Application.spec(:teslamate, :vsn) || "Unknown",
+      version: get_version(),
       erlang_version: System.otp_release(),
       elixir_version: System.version(),
       hostname: System.cmd("hostname", []) |> elem(0) |> String.trim(),
@@ -186,6 +186,22 @@ defmodule TeslaMate.Email do
       latest_drive: get_latest_drive(),
       latest_charging: get_latest_charging()
     }
+  end
+
+  defp get_version() do
+    # Try to get version from Application spec first
+    case Application.spec(:teslamate, :vsn) do
+      nil -> 
+        # Fallback to reading VERSION file
+        case File.read("VERSION") do
+          {:ok, version} -> String.trim(version)
+          {:error, _reason} -> "Unknown"
+        end
+      version when is_binary(version) -> 
+        version
+      _ -> 
+        "Unknown"
+    end
   end
 
   defp get_latest_drive() do

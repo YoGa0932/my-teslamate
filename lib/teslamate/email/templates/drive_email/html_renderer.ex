@@ -4,6 +4,9 @@ defmodule TeslaMate.Email.Templates.DriveEmail.HtmlRenderer do
   """
 
   alias TeslaMate.Email.Templates.DriveEmail.DriveInfoFormatter
+  alias TeslaMate.Email.Templates.TrajectoryMap.TrajectoryMapService
+
+  require Logger
 
   def render(drive) do
     drive_info = DriveInfoFormatter.format_drive_info(drive)
@@ -169,59 +172,6 @@ defmodule TeslaMate.Email.Templates.DriveEmail.HtmlRenderer do
   end
 
   defp render_map_section(drive_id) do
-    case call_map_service(drive_id) do
-      {:ok, base64_image, _map_info} ->
-        """
-        <div class="section trajectory-section">
-          <h3>🗺️ Drive Trajectory</h3>
-          <div class="map-container" style="text-align: center; margin: 20px 0;">
-            <img src="data:image/png;base64,#{base64_image}" 
-                 alt="Drive Trajectory" 
-                 style="width: 100%; max-width: 800px; height: auto; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);" />
-          </div>
-        </div>
-        """
-      {:error, _reason} ->
-        ""
-    end
-  end
-
-  defp call_map_service(drive_id) do
-    service_url = case System.get_env("MAP_SERVICE_URL") do
-      nil -> 
-        "http://localhost:5001"
-      url when is_binary(url) and byte_size(url) > 0 -> 
-        url
-      _ ->
-        "http://localhost:5001"
-    end
-    
-    request_body = Jason.encode!(%{drive_id: drive_id})
-    case Finch.build(:post, "#{service_url}/generate_map", 
-         [{"Content-Type", "application/json"}], 
-         request_body)
-         |> Finch.request(TeslaMate.HTTP, timeout: 30000) do
-        
-        {:ok, %Finch.Response{status: 200, body: body}} ->
-          case Jason.decode(body) do
-            {:ok, %{"success" => true, "image_base64" => image_base64, "drive_id" => ^drive_id} = map_info} ->
-              {:ok, image_base64, map_info}
-            {:ok, %{"success" => false, "error" => error}} ->
-              {:error, error}
-            {:ok, _response} ->
-              {:error, "Invalid response format"}
-            {:error, _decode_error} ->
-              {:error, "Failed to parse response"}
-          end
-        
-        {:ok, %Finch.Response{status: status_code, body: _body}} ->
-          {:error, "HTTP #{status_code}"}
-        
-        {:error, _reason} ->
-          {:error, "Connection failed"}
-      end
-  rescue
-    _e ->
-      {:error, "Service call failed"}
+    TrajectoryMapService.render_map_section(drive_id)
   end
 end 

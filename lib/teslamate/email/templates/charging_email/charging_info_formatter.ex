@@ -90,7 +90,7 @@ defmodule TeslaMate.Email.Templates.ChargingEmail.ChargingInfoFormatter do
             "N/A"
           else
             cost_per_kwh = Decimal.div(cost, energy_added)
-            "¥#{Decimal.to_float(cost_per_kwh)}/kWh"
+            "¥#{Float.round(Decimal.to_float(cost_per_kwh), 3)}/kWh"
           end
         rescue
           _ -> "N/A"
@@ -105,7 +105,15 @@ defmodule TeslaMate.Email.Templates.ChargingEmail.ChargingInfoFormatter do
   defp format_battery_level_change(_, _), do: "N/A"
 
   defp format_rated_range_change(start_range, end_range) when is_number(start_range) and is_number(end_range) do
-    "#{start_range} → #{end_range} km"
+    range_change = start_range - end_range
+    cond do
+      range_change > 0 ->
+        "↓ #{Float.round(range_change, 1)}km"
+      range_change < 0 ->
+        "↑ #{Float.round(abs(range_change), 1)}km"
+      true ->
+        "0km"
+    end
   end
   defp format_rated_range_change(_, _), do: "N/A"
 

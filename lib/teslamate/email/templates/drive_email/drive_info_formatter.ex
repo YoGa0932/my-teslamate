@@ -46,7 +46,7 @@ defmodule TeslaMate.Email.Templates.DriveEmail.DriveInfoFormatter do
   defp format_duration(duration) when is_number(duration), do: format_duration_minutes(duration)
   defp format_duration(_), do: "N/A"
 
-  defp format_speed(speed) when is_number(speed), do: "#{speed} km/h"
+  defp format_speed(speed) when is_number(speed), do: "#{Float.round(speed, 3)} km/h"
   defp format_speed(_), do: "N/A"
 
   defp format_energy_consumption(consumption) when is_number(consumption), do: "#{Float.round(consumption, 1)} Wh/km"
@@ -105,21 +105,18 @@ defmodule TeslaMate.Email.Templates.DriveEmail.DriveInfoFormatter do
       is_nil(start_rated_range) or is_nil(end_rated_range) or is_nil(actual_distance) ->
         "N/A"
       true ->
-        start_range = convert_decimal_to_float(start_rated_range)
-        end_range = convert_decimal_to_float(end_rated_range)
-        range_change = start_range - end_range
+        # start_rated_range and end_rated_range are numeric (Decimal)
+        start_float = Decimal.to_float(start_rated_range)
+        end_float = Decimal.to_float(end_rated_range)
+        range_change = start_float - end_float
         
         cond do
-          range_change > actual_distance ->
-            difference = range_change - actual_distance
-            percentage = (difference / actual_distance) * 100
-            "Reduced #{Float.round(range_change, 1)}km (Higher than actual distance #{Float.round(difference, 1)}km, +#{Float.round(percentage, 1)}%)"
-          range_change < actual_distance ->
-            difference = actual_distance - range_change
-            percentage = (difference / actual_distance) * 100
-            "Reduced #{Float.round(range_change, 1)}km (Lower than actual distance #{Float.round(difference, 1)}km, -#{Float.round(percentage, 1)}%)"
+          range_change > 0 ->
+            "↓ #{Float.round(range_change, 1)}km"
+          range_change < 0 ->
+            "↑ #{Float.round(abs(range_change), 1)}km"
           true ->
-            "Reduced #{Float.round(range_change, 1)}km (Matches actual distance)"
+            "0km"
         end
     end
   end
@@ -138,9 +135,6 @@ defmodule TeslaMate.Email.Templates.DriveEmail.DriveInfoFormatter do
 
   defp format_elevation(elevation) when is_number(elevation), do: "#{elevation} m"
   defp format_elevation(_), do: "N/A"
-
-  defp convert_decimal_to_float(%Decimal{} = decimal), do: Decimal.to_float(decimal)
-  defp convert_decimal_to_float(value), do: value
 
   defp format_duration_minutes(minutes) when is_number(minutes) do
     hours = div(minutes, 60)

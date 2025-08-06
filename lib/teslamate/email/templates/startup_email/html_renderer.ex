@@ -6,6 +6,9 @@ defmodule TeslaMate.Email.Templates.StartupEmail.HtmlRenderer do
   alias TeslaMate.Email.Templates.StartupEmail.SystemInfoFormatter
   alias TeslaMate.Email.Templates.DriveEmail.DriveInfoFormatter
   alias TeslaMate.Email.Templates.ChargingEmail.ChargingInfoFormatter
+  alias TeslaMate.Email.Templates.TrajectoryMap.TrajectoryMapService
+
+  require Logger
 
   def render(info) do
     system_info = SystemInfoFormatter.format_system_info(info)
@@ -161,6 +164,9 @@ defmodule TeslaMate.Email.Templates.StartupEmail.HtmlRenderer do
   defp render_drive_section(drive) do
     # Use drive info formatter to get formatted drive information
     drive_info = DriveInfoFormatter.format_drive_info(drive)
+    
+    # Try to get map trajectory
+    map_html = render_map_section(drive.id)
 
     """
     <h3>🚗 Latest Drive Record</h3>
@@ -266,6 +272,8 @@ defmodule TeslaMate.Email.Templates.StartupEmail.HtmlRenderer do
         </div>
       </div>
     </div>
+    
+    #{map_html}
     """
   end
 
@@ -370,4 +378,8 @@ defmodule TeslaMate.Email.Templates.StartupEmail.HtmlRenderer do
     Calendar.strftime(local_datetime, "%Y-%m-%d %H:%M:%S")
   end
   defp format_datetime_local(_), do: "Unknown"
+
+  defp render_map_section(drive_id) do
+    TrajectoryMapService.render_map_section(drive_id)
+  end
 end 
