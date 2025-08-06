@@ -158,6 +158,20 @@ defmodule TeslaMate.Email.Templates.DriveEmail.HtmlRenderer do
             </div>
           </div>
 
+          <div class="section temperature-section">
+            <h3>🌡️ Temperature Information</h3>
+            <div class="info-grid">
+              <div class="info-row">
+                <div class="label">🌡️ Avg Outside Temp</div>
+                <div class="value">#{drive_info.outside_temp}</div>
+              </div>
+              <div class="info-row">
+                <div class="label">🌡️ Avg Inside Temp</div>
+                <div class="value">#{drive_info.inside_temp}</div>
+              </div>
+            </div>
+          </div>
+
           #{map_html}
         </div>
 

@@ -36,7 +36,11 @@ defmodule TeslaMate.Email.Templates.DriveEmail.DriveInfoFormatter do
       
       # Elevation information
       ascent: format_elevation(drive.ascent),
-      descent: format_elevation(drive.descent)
+      descent: format_elevation(drive.descent),
+      
+      # Temperature information
+      outside_temp: format_temperature(drive.outside_temp_avg),
+      inside_temp: format_temperature(drive.inside_temp_avg)
     }
   end
 
@@ -111,15 +115,21 @@ defmodule TeslaMate.Email.Templates.DriveEmail.DriveInfoFormatter do
         # start_rated_range and end_rated_range are numeric (Decimal)
         start_float = Decimal.to_float(start_rated_range)
         end_float = Decimal.to_float(end_rated_range)
-        range_change = start_float - end_float
+        actual_float = if is_struct(actual_distance, Decimal), do: Decimal.to_float(actual_distance), else: actual_distance
+        
+        range_consumed = start_float - end_float
+        
+        efficiency_diff = range_consumed - actual_float
+        
+        percentage = if start_float > 0, do: (range_consumed / start_float) * 100, else: 0
         
         cond do
-          range_change > 0 ->
-            "↓ #{Float.round(range_change, 1)}km"
-          range_change < 0 ->
-            "↑ #{Float.round(abs(range_change), 1)}km"
+          efficiency_diff > 0 ->
+            "🔋 #{Float.round(range_consumed, 1)}km (over-consumed #{Float.round(efficiency_diff, 1)}km, #{Float.round(percentage, 1)}%)"
+          efficiency_diff < 0 ->
+            "🔋 #{Float.round(range_consumed, 1)}km (under-consumed #{Float.round(abs(efficiency_diff), 1)}km, #{Float.round(percentage, 1)}%)"
           true ->
-            "0km"
+            "🔋 #{Float.round(range_consumed, 1)}km (no difference, #{Float.round(percentage, 1)}%)"
         end
     end
   end
@@ -146,6 +156,10 @@ defmodule TeslaMate.Email.Templates.DriveEmail.DriveInfoFormatter do
   defp format_elevation(elevation) when is_number(elevation), do: "#{elevation} m"
   defp format_elevation(_), do: "N/A"
 
+  defp format_temperature(temp) when is_number(temp), do: "#{temp}°C"
+  defp format_temperature(temp) when is_struct(temp, Decimal), do: "#{Decimal.to_float(temp)}°C"
+  defp format_temperature(_), do: "N/A"
+
   defp format_duration_minutes(minutes) when is_number(minutes) do
     hours = div(minutes, 60)
     remaining_minutes = rem(minutes, 60)
@@ -159,37 +173,25 @@ defmodule TeslaMate.Email.Templates.DriveEmail.DriveInfoFormatter do
   defp format_duration_minutes(_), do: "N/A"
 
   defp get_latest_range(car_id) do
-    now = DateTime.utc_now()
-    yesterday = DateTime.add(now, -24 * 60 * 60, :second)
+    import Ecto.Query
     
-    query = """
-    SELECT date AS "time", range as "range_km"
-    FROM (
-      (SELECT date, est_battery_range_km AS range
-       FROM positions
-       WHERE car_id = $1 AND est_battery_range_km IS NOT NULL 
-       AND date BETWEEN $2 AND $3
-       ORDER BY date DESC
-       LIMIT 1)
-      UNION ALL
-      (SELECT date, ideal_battery_range_km AS range
-       FROM charges c
-       JOIN charging_processes p ON p.id = c.charging_process_id
-       WHERE p.car_id = $1 AND date BETWEEN $2 AND $3
-       ORDER BY date DESC
-       LIMIT 1)
-    ) AS data
-    ORDER BY date DESC
-    LIMIT 1
-    """
-    
-    case TeslaMate.Repo.query(query, [car_id, yesterday, now]) do
-      {:ok, %{rows: [[_date, range_km] | _]}} when is_number(range_km) ->
-        Float.round(range_km, 1)
-      {:ok, %{rows: [[_date, %Decimal{} = range_km] | _]}} ->
-        Float.round(Decimal.to_float(range_km), 1)
-      _ ->
-        nil
+    case TeslaMate.Repo.one(
+      from c in TeslaMate.Log.Car,
+      where: c.id == ^car_id,
+      select: c.efficiency
+    ) do
+      efficiency when not is_nil(efficiency) ->
+        case TeslaMate.Repo.one(
+          from d in TeslaMate.Log.Drive,
+          where: d.car_id == ^car_id and not is_nil(d.end_rated_range_km),
+          order_by: [desc: d.end_date],
+          limit: 1,
+          select: d.end_rated_range_km
+        ) do
+          range when not is_nil(range) -> range
+          _ -> nil
+        end
+      _ -> nil
     end
   end
 end 

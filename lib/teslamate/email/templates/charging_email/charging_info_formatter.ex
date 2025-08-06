@@ -32,6 +32,7 @@ defmodule TeslaMate.Email.Templates.ChargingEmail.ChargingInfoFormatter do
   end
 
   defp format_energy_added(energy) when is_number(energy), do: "#{energy} kWh"
+  defp format_energy_added(energy) when is_struct(energy, Decimal), do: "#{Decimal.to_float(energy)} kWh"
   defp format_energy_added(_), do: "N/A"
 
   defp format_duration(duration) when is_number(duration), do: format_duration_minutes(duration)
@@ -63,6 +64,7 @@ defmodule TeslaMate.Email.Templates.ChargingEmail.ChargingInfoFormatter do
   defp format_power_avg(_), do: "N/A"
 
   defp format_energy_used(energy) when is_number(energy), do: "#{energy} kWh"
+  defp format_energy_used(energy) when is_struct(energy, Decimal), do: "#{Decimal.to_float(energy)} kWh"
   defp format_energy_used(_), do: "N/A"
 
   defp format_efficiency(energy_added, energy_used) do
@@ -105,15 +107,12 @@ defmodule TeslaMate.Email.Templates.ChargingEmail.ChargingInfoFormatter do
   defp format_battery_level_change(_, _), do: "N/A"
 
   defp format_rated_range_change(start_range, end_range) when is_number(start_range) and is_number(end_range) do
-    range_change = start_range - end_range
-    cond do
-      range_change > 0 ->
-        "↓ #{Float.round(range_change, 1)}km"
-      range_change < 0 ->
-        "↑ #{Float.round(abs(range_change), 1)}km"
-      true ->
-        "0km"
-    end
+    "#{start_range} → #{end_range} km"
+  end
+  defp format_rated_range_change(start_range, end_range) when is_struct(start_range, Decimal) and is_struct(end_range, Decimal) do
+    start_float = Decimal.to_float(start_range)
+    end_float = Decimal.to_float(end_range)
+    "#{start_float} → #{end_float} km"
   end
   defp format_rated_range_change(_, _), do: "N/A"
 
@@ -129,6 +128,7 @@ defmodule TeslaMate.Email.Templates.ChargingEmail.ChargingInfoFormatter do
   end
 
   defp format_outside_temp(temp) when is_number(temp), do: "#{temp}°C"
+  defp format_outside_temp(temp) when is_struct(temp, Decimal), do: "#{Decimal.to_float(temp)}°C"
   defp format_outside_temp(_), do: "N/A"
 
   defp format_datetime(datetime) when not is_nil(datetime) do
