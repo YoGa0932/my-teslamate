@@ -353,9 +353,20 @@ defmodule TeslaMate.Log do
           |> put_geofence(:start_geofence_id, start_pos)
           |> put_geofence(:end_geofence_id, end_pos)
 
-        drive
-        |> Drive.changeset(attrs)
-        |> Repo.update()
+        updated_drive =
+          drive
+          |> Drive.changeset(attrs)
+          |> Repo.update()
+
+        # Send driving completion email asynchronously
+        Task.start(fn ->
+          case updated_drive do
+            {:ok, drive} -> TeslaMate.EmailService.send_driving_email(drive.id)
+            _ -> :ok
+          end
+        end)
+
+        updated_drive
 
       _ ->
         drive
@@ -486,7 +497,9 @@ defmodule TeslaMate.Log do
       |> Map.put(:charge_energy_used, charge_energy_used)
       |> Map.update(:charge_energy_added, nil, fn kwh ->
         cond do
-          kwh == nil or Decimal.negative?(kwh) -> nil
+          kwh == nil -> nil
+          is_float(kwh) -> Decimal.from_float(kwh)
+          Decimal.negative?(kwh) -> nil
           true -> kwh
         end
       end)
@@ -494,6 +507,9 @@ defmodule TeslaMate.Log do
 
     with {:ok, cproc} <- charging_process |> ChargingProcess.changeset(attrs) |> Repo.update(),
          {:ok, _car} <- recalculate_efficiency(charging_process.car, settings) do
+      # Send charging completion email asynchronously
+      Task.start(fn -> TeslaMate.EmailService.send_charging_email(cproc.id) end)
+
       {:ok, cproc}
     end
   end
