@@ -229,17 +229,115 @@ defmodule TeslaMate.Locations.Geocoder do
   end
 
   defp extract_best_poi_name(regeocode) do
+    # Extract AOI name (area of interest) first
+    aoi_name = extract_best_aoi_name(regeocode)
+
     case get_in(regeocode, ["pois"]) do
       pois when is_list(pois) and length(pois) > 0 ->
-        pois
-        |> Enum.map(&calculate_poi_score/1)
-        |> Enum.filter(&valid_poi?/1)
-        |> Enum.sort_by(fn {_name, distance, weight} -> {distance, -weight} end)
+        poi_name =
+          pois
+          |> Enum.map(&calculate_poi_score/1)
+          |> Enum.filter(&valid_poi?/1)
+          |> Enum.sort_by(fn {_name, distance, weight} -> {distance, -weight} end)
+          |> List.first()
+          |> extract_poi_name()
+
+        # Simple comparison: prioritize AOI if closer, otherwise use POI
+        compare_and_select_name(aoi_name, poi_name, regeocode)
+
+      _ ->
+        aoi_name
+    end
+  end
+
+  # Extract best AOI name
+  defp extract_best_aoi_name(regeocode) do
+    case get_in(regeocode, ["aois"]) do
+      aois when is_list(aois) and length(aois) > 0 ->
+        aois
+        |> Enum.map(&calculate_aoi_score/1)
+        |> Enum.filter(&valid_aoi?/1)
+        |> Enum.sort_by(fn {_name, distance, area} -> {distance, -area} end)
         |> List.first()
-        |> extract_poi_name()
+        |> extract_aoi_name()
 
       _ ->
         nil
+    end
+  end
+
+  # Calculate AOI score
+  defp calculate_aoi_score(aoi) do
+    distance = parse_aoi_distance(aoi["distance"])
+    area = parse_aoi_area(aoi["area"])
+    {aoi["name"], distance, area}
+  end
+
+  # Parse AOI distance
+  defp parse_aoi_distance(dist) when is_binary(dist) do
+    case Float.parse(dist) do
+      {d, _} -> d
+      :error -> 999_999.0
+    end
+  end
+
+  defp parse_aoi_distance(dist) when is_number(dist), do: dist
+  defp parse_aoi_distance(_), do: 999_999.0
+
+  # Parse AOI area
+  defp parse_aoi_area(area) when is_binary(area) do
+    case Float.parse(area) do
+      {a, _} -> a
+      :error -> 0.0
+    end
+  end
+
+  defp parse_aoi_area(area) when is_number(area), do: area
+  defp parse_aoi_area(_), do: 0.0
+
+  # Validate AOI
+  defp valid_aoi?({name, _distance, _area}), do: name != nil and name != ""
+  defp valid_aoi?(_), do: false
+
+  # Extract AOI name
+  defp extract_aoi_name({name, _distance, _area}) when is_binary(name), do: name
+  defp extract_aoi_name(_), do: nil
+
+  # Compare and select name (distance first, weight second)
+  defp compare_and_select_name(aoi_name, poi_name, regeocode) do
+    cond do
+      # If AOI distance is 0 (within the area), prioritize AOI
+      aoi_name && get_aoi_distance(regeocode, aoi_name) == 0 ->
+        aoi_name
+
+      # If AOI distance is very close (less than 50m), prioritize AOI
+      aoi_name && get_aoi_distance(regeocode, aoi_name) < 50 ->
+        aoi_name
+
+      # Otherwise use POI name
+      poi_name && poi_name != "" ->
+        poi_name
+
+      # Finally fallback to AOI
+      aoi_name && aoi_name != "" ->
+        aoi_name
+
+      true ->
+        nil
+    end
+  end
+
+  # Get distance for specific AOI name
+  defp get_aoi_distance(regeocode, target_name) do
+    case get_in(regeocode, ["aois"]) do
+      aois when is_list(aois) ->
+        case Enum.find(aois, fn aoi -> aoi["name"] == target_name end) do
+          %{"distance" => distance} -> parse_aoi_distance(distance)
+          _ -> 999_999.0
+        end
+
+      _ ->
+        999_999.0
     end
   end
 
