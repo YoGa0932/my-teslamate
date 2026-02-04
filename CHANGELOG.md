@@ -2,15 +2,25 @@
 
 ## [unreleased]
 
+Let's start with a quote: "Why do programmers like dark mode? Because light attracts bugs.". Yes, you read that right. TeslaMate Webview now has a dark mode.
+
+As always, lots of improvements have been made. Memory usage has been reduced, while performance has been increased — it sounds too good to be true, but it's the reality.
+Battery heating is now also shown on the overview dashboard, and the drives dashboard now always shows the consumption.
+To make your TeslaMate experience even better, we have also made more than 28 other improvements.
+
+Enjoy!
+
 ### New features
 
-feat: add optional dark mode feature (#5065 - @wooter)
+- feat: add optional dark mode feature (#5065 - @wooter)
 
 ### Improvements and bug fixes
 
 - feat: use Logger instead of IO.puts in DB check (#5050 - @swiffer)
 - feat: Increase max_header_value_length to support oauth2-proxy (#5031 - @ultravail)
 - perf: Replace positions indexes from BTREE to BRIN to reduce memory usage (#5075 - @ilya-y-synth)
+- feat(grafana): disable update checks as version is handled via docker image (#5115 - @fatbasstard)
+- perf: use static asset compression via brotli and zstandard to enhance HTTP Compression (#5113 - @swiffer)
 
 #### Build, CI, internal
 
@@ -28,6 +38,12 @@ feat: add optional dark mode feature (#5065 - @wooter)
 - build(deps): bump crate-ci/typos from 1.40.0 to 1.41.0 (#5079)
 - build(deps): bump actions/stale from 10.1.0 to 10.1.1 (#5080)
 - build(deps): bump lodash from 4.17.21 to 4.17.23 in /website (#5109)
+- build(deps): bump lodash and @geoman-io/leaflet-geoman-free in /assets (#5126)
+- build(deps): bump react and react-dom from 19.2.3 to 19.2.4 in /website (#5124)
+- build(deps): bump crate-ci/typos from 1.41.0 to 1.42.3 (#5123)
+- build(deps): bump docker/login-action from 3.6.0 to 3.7.0 (#5119)
+- build(deps): bump nix-community/cache-nix-action from 7.0.0 to 7.0.2 (#5122)
+- build(deps): bump actions/cache from 5.0.1 to 5.0.3 (#5120)
 
 #### Dashboards
 
