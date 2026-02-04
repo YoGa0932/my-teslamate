@@ -13,6 +13,20 @@ defmodule TeslaMate.Locations.Geocoder do
   alias TeslaMate.Locations.Address
 
   def reverse_lookup(lat, lon, lang \\ "en") do
+    case amap_keys() do
+      [] -> reverse_lookup_nominatim(lat, lon, lang)
+      keys -> reverse_lookup_amap(lat, lon, lang, keys)
+    end
+  end
+
+  def details(addresses, lang) when is_list(addresses) do
+    case amap_keys() do
+      [] -> details_nominatim(addresses, lang)
+      _keys -> details_amap(addresses, lang)
+    end
+  end
+
+  defp reverse_lookup_nominatim(lat, lon, lang) do
     opts = [
       format: :jsonv2,
       addressdetails: 1,
@@ -29,7 +43,7 @@ defmodule TeslaMate.Locations.Geocoder do
     end
   end
 
-  def details(addresses, lang) when is_list(addresses) do
+  defp details_nominatim(addresses, lang) do
     osm_ids =
       addresses
       |> Enum.reject(fn %Address{} = a -> a.osm_id == nil or a.osm_type in [nil, "unknown"] end)
@@ -63,12 +77,140 @@ defmodule TeslaMate.Locations.Geocoder do
       {:error, reason}
   end
 
+  defp reverse_lookup_amap(lat, lon, _lang, keys) do
+    key = select_daily_key(keys)
+    {lat, lon} = maybe_convert_to_gcj02(lat, lon, key)
+    location = "#{lon},#{lat}"
+
+    params = [
+      key: key,
+      location: location,
+      extensions: "all",
+      radius: 1000,
+      output: "JSON"
+    ]
+
+    with {:ok, address_raw} <- query_amap("/v3/geocode/regeo", params),
+         {:ok, address} <- into_address_amap(address_raw, lat, lon) do
+      {:ok, address}
+    end
+  end
+
+  defp details_amap(addresses, lang) do
+    addresses =
+      Enum.map(addresses, fn
+        %Address{latitude: lat, longitude: lon} ->
+          case reverse_lookup(lat, lon, lang) do
+            {:ok, address} -> address
+            {:error, reason} -> throw({:invalid_address, reason})
+          end
+      end)
+
+    {:ok, addresses}
+  catch
+    {:invalid_address, reason} ->
+      {:error, reason}
+  end
+
   defp query(url, lang, params) do
     case get(url, query: params, headers: [{"Accept-Language", lang}]) do
       {:ok, %Tesla.Env{status: 200, body: body}} -> {:ok, body}
       {:ok, %Tesla.Env{body: %{"error" => reason}}} -> {:error, reason}
       {:ok, %Tesla.Env{} = env} -> {:error, reason: "Unexpected response", env: env}
       {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp query_amap(url, params) do
+    case get("https://restapi.amap.com#{url}", query: params) do
+      {:ok, %Tesla.Env{status: 200, body: %{"status" => "1"} = body}} -> {:ok, body}
+      {:ok, %Tesla.Env{status: 200, body: %{"status" => "0", "info" => reason}}} ->
+        {:error, reason}
+
+      {:ok, %Tesla.Env{} = env} ->
+        {:error, reason: "Unexpected response", env: env}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp amap_keys do
+    System.get_env("AMAP_KEY")
+    |> case do
+      nil -> []
+      val -> val
+    end
+    |> String.split(",", trim: true)
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+  end
+
+  defp select_daily_key([key]), do: key
+
+  defp select_daily_key(keys) do
+    today = Date.utc_today()
+    yesterday = Date.add(today, -1)
+    len = length(keys)
+
+    today_idx = :erlang.phash2({:amap_key, today}, len)
+    yesterday_idx = :erlang.phash2({:amap_key, yesterday}, len)
+
+    idx =
+      if today_idx == yesterday_idx do
+        rem(today_idx + 1, len)
+      else
+        today_idx
+      end
+
+    Enum.at(keys, idx)
+  end
+
+  defp maybe_convert_to_gcj02(lat, lon, key) do
+    if in_china_mainland?(lat, lon) do
+      locations = "#{coord_to_string(lon)},#{coord_to_string(lat)}"
+
+      params = [
+        key: key,
+        locations: locations,
+        coordsys: "gps",
+        output: "JSON"
+      ]
+
+      case query_amap("/v3/assistant/coordinate/convert", params) do
+        {:ok, %{"locations" => converted}} ->
+          case String.split(converted, ";") |> List.first() |> String.split(",") do
+            [lon_c, lat_c] -> {lat_c, lon_c}
+            _ -> {coord_to_string(lat), coord_to_string(lon)}
+          end
+
+        {:error, _reason} ->
+          {coord_to_string(lat), coord_to_string(lon)}
+      end
+    else
+      {coord_to_string(lat), coord_to_string(lon)}
+    end
+  end
+
+  defp in_china_mainland?(lat, lon) do
+    lat_f = coord_to_float(lat)
+    lon_f = coord_to_float(lon)
+
+    lat_f >= 3.86 and lat_f <= 53.55 and lon_f >= 73.66 and lon_f <= 135.05
+  end
+
+  defp coord_to_string(%Decimal{} = val), do: Decimal.to_string(val, :normal)
+  defp coord_to_string(val) when is_binary(val), do: val
+  defp coord_to_string(val) when is_integer(val), do: Integer.to_string(val)
+  defp coord_to_string(val) when is_float(val), do: :erlang.float_to_binary(val, [:compact])
+
+  defp coord_to_float(%Decimal{} = val), do: Decimal.to_float(val)
+  defp coord_to_float(val) when is_integer(val), do: val * 1.0
+  defp coord_to_float(val) when is_float(val), do: val
+  defp coord_to_float(val) when is_binary(val) do
+    case Float.parse(val) do
+      {num, _} -> num
+      :error -> 0.0
     end
   end
 
@@ -171,6 +313,59 @@ defmodule TeslaMate.Locations.Geocoder do
     }
 
     {:ok, address}
+  end
+
+  defp into_address_amap(%{"status" => "0", "info" => reason}, _lat, _lon) do
+    {:error, {:geocoding_failed, reason}}
+  end
+
+  defp into_address_amap(%{"regeocode" => regeocode} = raw, lat, lon) do
+    address_component = Map.get(regeocode, "addressComponent", %{})
+    street_number = Map.get(address_component, "streetNumber", %{})
+
+    name =
+      address_component
+      |> Map.get("building", %{})
+      |> Map.get("name") ||
+        address_component
+        |> Map.get("neighborhood", %{})
+        |> Map.get("name")
+
+    city =
+      case Map.get(address_component, "city") do
+        [] -> Map.get(address_component, "province")
+        "" -> Map.get(address_component, "province")
+        nil -> Map.get(address_component, "province")
+        val -> val
+      end
+
+    address = %{
+      display_name: Map.get(regeocode, "formatted_address") || "Unknown",
+      osm_id: osm_hash_id(lat, lon),
+      osm_type: "amap",
+      latitude: to_string(lat),
+      longitude: to_string(lon),
+      name: name,
+      house_number: Map.get(street_number, "number"),
+      road: Map.get(street_number, "street"),
+      neighbourhood:
+        Map.get(address_component, "neighborhood", %{})
+        |> Map.get("name") ||
+          Map.get(address_component, "township"),
+      city: city,
+      county: Map.get(address_component, "district"),
+      postcode: Map.get(address_component, "adcode"),
+      state: Map.get(address_component, "province"),
+      state_district: Map.get(address_component, "city"),
+      country: Map.get(address_component, "country") || "China",
+      raw: raw
+    }
+
+    {:ok, address}
+  end
+
+  defp osm_hash_id(lat, lon) do
+    :erlang.phash2({lat, lon}, 2_147_483_647)
   end
 
   defp get_first(nil, _aliases), do: nil
