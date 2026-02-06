@@ -326,10 +326,12 @@ defmodule TeslaMate.Locations.Geocoder do
     name =
       address_component
       |> Map.get("building", %{})
-      |> Map.get("name") ||
+      |> Map.get("name")
+      |> amap_string() ||
         address_component
         |> Map.get("neighborhood", %{})
         |> Map.get("name")
+        |> amap_string()
 
     city =
       case Map.get(address_component, "city") do
@@ -350,8 +352,10 @@ defmodule TeslaMate.Locations.Geocoder do
       road: Map.get(street_number, "street"),
       neighbourhood:
         Map.get(address_component, "neighborhood", %{})
-        |> Map.get("name") ||
-          Map.get(address_component, "township"),
+        |> Map.get("name")
+        |> amap_string() ||
+          Map.get(address_component, "township")
+          |> amap_string(),
       city: city,
       county: Map.get(address_component, "district"),
       postcode: Map.get(address_component, "adcode"),
@@ -367,6 +371,13 @@ defmodule TeslaMate.Locations.Geocoder do
   defp osm_hash_id(lat, lon) do
     :erlang.phash2({lat, lon}, 2_147_483_647)
   end
+
+  defp amap_string(val) when is_binary(val) do
+    val = String.trim(val)
+    if val == "", do: nil, else: val
+  end
+
+  defp amap_string(_val), do: nil
 
   defp get_first(nil, _aliases), do: nil
   defp get_first(_address, []), do: nil
