@@ -16,9 +16,27 @@ defmodule TeslaMate.Locations do
   ## Address
 
   def create_address(attrs \\ %{}) do
-    %Address{}
-    |> Address.changeset(attrs)
-    |> Repo.insert()
+    changeset = Address.changeset(%Address{}, attrs)
+
+    case Repo.insert(changeset) do
+      {:ok, %Address{} = address} ->
+        {:ok, address}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        case {Map.get(attrs, :osm_id), Map.get(attrs, :osm_type)} do
+          {nil, _} ->
+            {:error, changeset}
+
+          {_, nil} ->
+            {:error, changeset}
+
+          {osm_id, osm_type} ->
+            case Repo.get_by(Address, osm_id: osm_id, osm_type: osm_type) do
+              %Address{} = address -> {:ok, address}
+              nil -> {:error, changeset}
+            end
+        end
+    end
   end
 
   def update_address(%Address{} = address, attrs) do
