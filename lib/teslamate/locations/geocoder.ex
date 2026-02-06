@@ -323,15 +323,7 @@ defmodule TeslaMate.Locations.Geocoder do
     address_component = Map.get(regeocode, "addressComponent", %{})
     street_number = Map.get(address_component, "streetNumber", %{})
 
-    name =
-      address_component
-      |> Map.get("building", %{})
-      |> Map.get("name")
-      |> amap_string() ||
-        address_component
-        |> Map.get("neighborhood", %{})
-        |> Map.get("name")
-        |> amap_string()
+    name = pick_amap_name(regeocode, address_component, street_number)
 
     city =
       case Map.get(address_component, "city") do
@@ -370,6 +362,68 @@ defmodule TeslaMate.Locations.Geocoder do
 
   defp osm_hash_id(lat, lon) do
     :erlang.phash2({lat, lon}, 2_147_483_647)
+  end
+
+  defp pick_amap_name(regeocode, address_component, street_number) do
+    aoi_name =
+      regeocode
+      |> Map.get("aois", [])
+      |> first_amap_name()
+
+    poi_name =
+      regeocode
+      |> Map.get("pois", [])
+      |> pick_poi_name()
+
+    street_name =
+      [Map.get(street_number, "street"), Map.get(street_number, "number")]
+      |> Enum.map(&amap_string/1)
+      |> Enum.filter(& &1)
+      |> Enum.join("")
+      |> amap_string()
+
+    aoi_name ||
+      poi_name ||
+      street_name ||
+      address_component
+      |> Map.get("building", %{})
+      |> Map.get("name")
+      |> amap_string() ||
+      address_component
+      |> Map.get("neighborhood", %{})
+      |> Map.get("name")
+      |> amap_string() ||
+      Map.get(regeocode, "formatted_address")
+  end
+
+  defp first_amap_name([]), do: nil
+
+  defp first_amap_name([item | _]) do
+    item |> Map.get("name") |> amap_string()
+  end
+
+  defp pick_poi_name(pois) do
+    pois
+    |> Enum.map(fn poi -> {amap_poi_distance(poi), amap_poi_weight(poi), poi} end)
+    |> Enum.sort_by(fn {dist, weight, _poi} -> {dist || 1.0e12, -(weight || 0.0)} end)
+    |> case do
+      [] -> nil
+      [{_dist, _weight, poi} | _] -> poi |> Map.get("name") |> amap_string()
+    end
+  end
+
+  defp amap_poi_distance(poi) do
+    case Float.parse(to_string(Map.get(poi, "distance", ""))) do
+      {val, _} -> val
+      :error -> nil
+    end
+  end
+
+  defp amap_poi_weight(poi) do
+    case Float.parse(to_string(Map.get(poi, "poiweight", ""))) do
+      {val, _} -> val
+      :error -> nil
+    end
   end
 
   defp amap_string(val) when is_binary(val) do
