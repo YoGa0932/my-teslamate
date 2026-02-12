@@ -326,12 +326,10 @@ defmodule TeslaMate.Locations.Geocoder do
     name = pick_amap_name(regeocode, address_component, street_number)
 
     city =
-      case Map.get(address_component, "city") do
-        [] -> Map.get(address_component, "province")
-        "" -> Map.get(address_component, "province")
-        nil -> Map.get(address_component, "province")
-        val -> val
-      end
+      Map.get(address_component, "city")
+      |> amap_string() ||
+        Map.get(address_component, "province")
+        |> amap_string()
 
     address = %{
       display_name: Map.get(regeocode, "formatted_address") || "Unknown",
@@ -340,8 +338,12 @@ defmodule TeslaMate.Locations.Geocoder do
       latitude: to_string(lat),
       longitude: to_string(lon),
       name: name,
-      house_number: Map.get(street_number, "number"),
-      road: Map.get(street_number, "street"),
+      house_number:
+        Map.get(street_number, "number")
+        |> amap_string(),
+      road:
+        Map.get(street_number, "street")
+        |> amap_string(),
       neighbourhood:
         Map.get(address_component, "neighborhood", %{})
         |> Map.get("name")
@@ -349,11 +351,11 @@ defmodule TeslaMate.Locations.Geocoder do
           Map.get(address_component, "township")
           |> amap_string(),
       city: city,
-      county: Map.get(address_component, "district"),
-      postcode: Map.get(address_component, "adcode"),
-      state: Map.get(address_component, "province"),
-      state_district: Map.get(address_component, "city"),
-      country: Map.get(address_component, "country") || "China",
+      county: Map.get(address_component, "district") |> amap_string(),
+      postcode: Map.get(address_component, "adcode") |> amap_string(),
+      state: Map.get(address_component, "province") |> amap_string(),
+      state_district: Map.get(address_component, "city") |> amap_string(),
+      country: Map.get(address_component, "country") |> amap_string() || "China",
       raw: raw
     }
 
