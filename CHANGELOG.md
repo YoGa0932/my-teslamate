@@ -2,17 +2,46 @@
 
 ## [unreleased]
 
+### New features
+
+### Improvements and bug fixes
+
+#### Build, CI, internal
+
+#### Dashboards
+
+#### Translations
+
+#### Documentation
+
+## [3.0.0] - 2026-02-28
+
 Let's start with a quote: "Why do programmers like dark mode? Because light attracts bugs.". Yes, you read that right. TeslaMate Webview now has a dark mode.
 
 As always, lots of improvements have been made. Memory usage has been reduced, while performance has been increased — it sounds too good to be true, but it's the reality.
 Battery heating is now also shown on the overview dashboard, and the drives dashboard now always shows the consumption.
-To make your TeslaMate experience even better, we have also made more than 28 other improvements.
+To make your TeslaMate experience even better, we have also made more than 52 other improvements.
 
 Enjoy!
+
+### 📄 License Change Notice
+
+As of PR #5131, TeslaMate has transitioned from the MIT License to the GNU Affero General Public License v3.0 (AGPLv3).
+
+What does this mean for you?
+
+- For Private Users: Nothing changes. You can continue to use, host, and modify TeslaMate for your personal use for free, just as before.
+- For the Community: This change ensures that TeslaMate remains open and free. It prevents companies from taking the community's hard work and turning it into a closed-source commercial service without giving back.
+- For Developers: If you modify or use TeslaMate, you must now share your source code modifications under the same license.
+
+We believe this step is necessary to protect the project from exploitation and to ensure its long-term sustainability.
 
 ### New features
 
 - feat: add optional dark mode feature (#5065 - @wooter)
+- legal: relicense under AGPLv3 (#5131 - @JakobLichterfeld)
+- legal: add Trademark notice (#5131 - @JakobLichterfeld)
+- feat: use Bulma 1 for dark theme and revised it (#5112 - @swiffer)
 
 ### Improvements and bug fixes
 
@@ -21,6 +50,8 @@ Enjoy!
 - perf: Replace positions indexes from BTREE to BRIN to reduce memory usage (#5075 - @ilya-y-synth)
 - feat(grafana): disable update checks as version is handled via docker image (#5115 - @fatbasstard)
 - perf: use static asset compression via brotli and zstandard to enhance HTTP Compression (#5113 - @swiffer)
+- feat: use Grafana 12.4.0 (#4965 - @swiffer)
+- fix(vehicle): update state transition to handle offline scenario after a drive end with no network (#5152 - @jlestel)
 
 #### Build, CI, internal
 
@@ -44,6 +75,25 @@ Enjoy!
 - build(deps): bump docker/login-action from 3.6.0 to 3.7.0 (#5119)
 - build(deps): bump nix-community/cache-nix-action from 7.0.0 to 7.0.2 (#5122)
 - build(deps): bump actions/cache from 5.0.1 to 5.0.3 (#5120)
+- build(deps): bump webpack from 5.102.0 to 5.105.0 in /website (#5135)
+- feat(nix): use nixos-25.11 (#5062 - @JakobLichterfeld)
+- chore(nix): update flake.lock with new dependency revisions (#5062 - @JakobLichterfeld)
+- build(nix): use elixir 1.19 to align with dockerfile (#5062 - @JakobLichterfeld)
+- chore: reorganize CLI definition to avoid elixir 1.19 warning (#5062 - @JakobLichterfeld)
+- build: update db_connection to version 2.9.0 (#5062 - @JakobLichterfeld)
+- build: use Elixir 1.19.5 OTP 26 (#5130 - @swiffer, @brianmay and @JakobLichterfeld)
+- build(deps): bump qs from 6.14.1 to 6.14.2 in /website (#5140)
+- build(deps): update & bump mix deps (#5139 - @swiffer)
+- build(deps): bump ex_cldr from 2.42.0 to 2.46.0 (#5053 - @JakobLichterfeld)
+- build(deps): bump floki & gettext, remove override on ranch, require elixir 1.19 (#5142 - @swiffer)
+- feat(grafana-home-dashboard): change cors proxy (#5143 - @swiffer)
+- build(deps): update flake.lock (#5141)
+- build(deps): relax requirement for elixir to allow 1.17+ and clarify what is supported (#5145 - @swiffer)
+- build(deps): update flake.lock (#5148)
+- build(deps): update flake.lock (#5154)
+- build(deps): bump ajv in /website (#5149)
+- chore(website): bump mimimatch to version 3.1.5 to solve CVE-2026-26996, CVE-2026-27903 and CVE-2026-27904 (#5155 - @JakobLichterfeld)
+- chore(website): bump serialize-javascript to version 7.0.3 to solve CWE-96 (#5156 - @JakobLichterfeld)
 
 #### Dashboards
 
@@ -59,6 +109,7 @@ Enjoy!
 - docs: fix external image rendering with Traefik SSL (#5074 - @swiffer)
 - docs(home_assistant): default tesla_active_route_distance_to_arrival sensor to kilometers (#5086 - @kenni)
 - docs: Remove hints to now deprecated Grafana VS Code Extension in contribution guide (#5110 - @swiffer)
+- docs: Add reference to TeslaMate Achievements (#5134 - @crstian19)
 
 ## [2.2.0] - 2025-11-06
 
@@ -1734,7 +1785,6 @@ Additional:
 - Overview: Update battery gauge thresholds ([#651](https://github.com/adriankumpf/teslamate/pull/651) by [wooter](https://github.com/wooter))
 - Drives: Add column header for reduced range ([#662](https://github.com/adriankumpf/teslamate/pull/662) by [Dulanic](https://github.com/Dulanic))
 - Charging Stats: Show map with frequently used chargers ([#666](https://github.com/adriankumpf/teslamate/pull/666) by [Dulanic](https://github.com/Dulanic))
-
   - _Manual install: requires Grafana plugin **grafana-map-panel**_
 
     ```bash
@@ -2677,7 +2727,8 @@ New users need to sign in via the web interface.
 
 ## [1.0.0] - 2019-07-25
 
-[unreleased]: https://github.com/teslamate-org/teslamate/compare/v2.2.0...HEAD
+[unreleased]: https://github.com/teslamate-org/teslamate/compare/v3.0.0...HEAD
+[3.0.0]: https://github.com/teslamate-org/teslamate/compare/v2.2.0...v3.0.0
 [2.2.0]: https://github.com/teslamate-org/teslamate/compare/v2.1.1...v2.2.0
 [2.1.1]: https://github.com/teslamate-org/teslamate/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/teslamate-org/teslamate/compare/v2.0.0...v2.1.0
