@@ -22,6 +22,7 @@
     {
       "icon": "dashboard",
       "tags": [],
+      "targetBlank": true,
       "title": "TeslaMate",
       "tooltip": "",
       "type": "link",
@@ -357,7 +358,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "13.1.1",
+      "pluginVersion": "13.2.1",
       "targets": [
         {
           "datasource": {
@@ -459,7 +460,7 @@
         "textMode": "value",
         "wideLayout": true
       },
-      "pluginVersion": "13.1.1",
+      "pluginVersion": "13.2.1",
       "targets": [
         {
           "datasource": {
@@ -540,7 +541,7 @@
         "textMode": "value",
         "wideLayout": true
       },
-      "pluginVersion": "13.1.1",
+      "pluginVersion": "13.2.1",
       "targets": [
         {
           "alias": "Elapsed Time",
@@ -680,7 +681,7 @@
         "textMode": "value",
         "wideLayout": true
       },
-      "pluginVersion": "13.1.1",
+      "pluginVersion": "13.2.1",
       "targets": [
         {
           "datasource": {
@@ -690,7 +691,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\n  COALESCE(g.name, CONCAT_WS(', ', COALESCE(addresses.name, CONCAT_WS(' ', addresses.road, addresses.house_number)), addresses.city))\nFROM\n\tcharging_processes c\n\tLEFT JOIN addresses ON addresses.id = c.address_id\n\tLEFT JOIN geofences g ON g.id = geofence_id\nWHERE\n\tc.id = $charging_process_id",
+          "rawSql": "SELECT\n  COALESCE(g.name, CONCAT_WS(', ', COALESCE(addresses.name, CONCAT_WS(' ', addresses.road, addresses.house_number)), COALESCE(addresses.city, addresses.neighbourhood)))\nFROM\n\tcharging_processes c\n\tLEFT JOIN addresses ON addresses.id = c.address_id\n\tLEFT JOIN geofences g ON g.id = geofence_id\nWHERE\n\tc.id = $charging_process_id",
           "refId": "A",
           "sql": {
             "columns": [
@@ -786,7 +787,7 @@
         "textMode": "value_and_name",
         "wideLayout": true
       },
-      "pluginVersion": "13.1.1",
+      "pluginVersion": "13.2.1",
       "targets": [
         {
           "datasource": {
@@ -996,7 +997,7 @@
           "zoom": 15
         }
       },
-      "pluginVersion": "13.1.1",
+      "pluginVersion": "13.2.1",
       "targets": [
         {
           "datasource": {
@@ -1089,7 +1090,7 @@
         "textMode": "value_and_name",
         "wideLayout": true
       },
-      "pluginVersion": "13.1.1",
+      "pluginVersion": "13.2.1",
       "targets": [
         {
           "datasource": {
@@ -1229,7 +1230,7 @@
         "textMode": "value",
         "wideLayout": true
       },
-      "pluginVersion": "13.1.1",
+      "pluginVersion": "13.2.1",
       "targets": [
         {
           "datasource": {
@@ -1337,7 +1338,7 @@
         "textMode": "value",
         "wideLayout": true
       },
-      "pluginVersion": "13.1.1",
+      "pluginVersion": "13.2.1",
       "targets": [
         {
           "datasource": {
@@ -1481,7 +1482,7 @@
         "textMode": "value_and_name",
         "wideLayout": true
       },
-      "pluginVersion": "13.1.1",
+      "pluginVersion": "13.2.1",
       "targets": [
         {
           "datasource": {
@@ -1714,7 +1715,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "13.1.1",
+      "pluginVersion": "13.2.1",
       "targets": [
         {
           "datasource": {

@@ -45,11 +45,20 @@ broker do not collide on the same discovery topics. The device is grouped
 under the `teslamate_car_<car_id>` identifier (likewise namespace-scoped), and
 the entity IDs match those produced by the manual `mqtt_sensors.yaml` below.
 
-When upgrading from TeslaMate's former per-entity discovery format, TeslaMate
-uses Home Assistant's discovery migration protocol to preserve entity registry
-settings and customizations. It marks the former single-component topics for
-migration, publishes the device discovery payload, and then clears the old
-retained topics.
+On the first vehicle summary after each startup, TeslaMate clears every retained
+topic from its former per-entity discovery format, waits for Home Assistant to
+process the removals, and then publishes one complete device discovery payload.
+For installations already using device discovery, repeating this sequence is
+state-idempotent but not silent. MQTT forwards each zero-byte retained publish
+to Home Assistant even when the legacy retained topic is already absent, so
+Home Assistant logs one harmless "conflicting MQTT discovery message" warning
+for each of the 62 legacy topics per vehicle after every TeslaMate restart.
+These warnings do not change or remove any existing entity, and the retained
+device payload is unchanged.
+
+This cleanup does not use Home Assistant's discovery migration protocol. As a
+result, entity registry settings and customizations from the former per-entity
+format are not preserved when upgrading directly from TeslaMate 4.1.x.
 
 :::note
 
@@ -124,7 +133,7 @@ Don't forget to replace `<teslamate url>`, `<your tesla model>` and `<your tesla
     unique_id: teslamate_1_display_name # internal id, used for device grouping
     device: &teslamate_device_info
       identifiers: [teslamate_car_1]
-      configuration_url: <teslamate url> # update this with your teslamate URL, e.g. https://teslamate.example.com/
+      configuration_url: <teslamate url> # update this with your TeslaMate URL, e.g. https://teslamate.example.com/
       manufacturer: Tesla
       model: <your tesla model> # update this with your car model, e.g. Model 3
       name: <your tesla name> # update this with your car name, e.g. Tesla Model 3
@@ -946,7 +955,7 @@ For example, opening the door will open the door and the window. If we don't del
 #### automation.yaml
 
 ```yml title="automation.yaml"
-- alias: Set timer if teslamate reports something is open to alert us
+- alias: Set timer if TeslaMate reports something is open to alert us
   initial_state: on
   trigger:
     - platform: mqtt
