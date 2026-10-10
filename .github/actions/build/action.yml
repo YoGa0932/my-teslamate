@@ -1,0 +1,133 @@
+name: "Build"
+description: "Build images"
+inputs:
+  is_dockerhub_pushed:
+    description: "Need docker hub login?"
+    required: true
+    default: ""
+  docker_password:
+    description: "Docker password"
+    required: true
+  repository_owner:
+    description: "Repository owner"
+    required: true
+    default: "teslamate-org"
+  repository:
+    description: "Repo owner and name (repo_owner/repo_name)"
+    required: true
+    default: "teslamate"
+  github_token:
+    description: "GitHub Token"
+    required: true
+  labels:
+    description: "Labels added on metadata"
+    required: false
+    default: ""
+  version:
+    description: "Branch deployed"
+    required: false
+    default: ""
+runs:
+  using: "composite"
+  steps:
+    - name: normalize version name to a valid string
+      # convert backslashes to dashes, so for example dependabot/x/y/z-1.2.3 works
+      id: normalize_version
+      shell: bash
+      run: |
+        VERSION="${{ inputs.version }}"
+        NORMALIZED_VERSION="${VERSION//\//-}"
+        echo "normalized_version=${NORMALIZED_VERSION}" >> $GITHUB_OUTPUT
+
+    - name: Docker meta
+      id: meta
+      uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0
+      with:
+        images: ${{ env.REGISTRY_IMAGE }}
+        labels: |
+          {{ inputs.labels }}
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+    - name: Login to Docker Hub
+      if: inputs.is_dockerhub_pushed != ''
+      uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+      with:
+        username: teslamate
+        password: ${{ inputs.docker_password }}
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+      with:
+        registry: ghcr.io
+        username: ${{ inputs.repository_owner }}
+        password: ${{ inputs.github_token }}
+    - name: Build and push by digest
+      id: build
+      uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+      with:
+        context: .
+        platforms: ${{ matrix.platform }}
+        labels: ${{ steps.meta.outputs.labels }}
+        tags: ${{ steps.docker_meta.outputs.tags }}
+        # Disable BuildKit-side attestations so outputs.digest is the bare image
+        # manifest digest. With provenance enabled, BuildKit wraps the image in
+        # an OCI index whose digest does NOT appear in the multi-arch manifest
+        # list produced by `imagetools create`, which would make tag-based
+        # attestation verification fail. Signed SLSA provenance is added by
+        # actions/attest-build-provenance below.
+        provenance: false
+        sbom: false
+        cache-from: |
+          type=registry,ref=ghcr.io/${{ inputs.repository }}:buildcache-${{ matrix.cache_id }}-${{ steps.normalize_version.outputs.normalized_version }}
+          type=registry,ref=ghcr.io/${{ inputs.repository }}:buildcache-${{ matrix.cache_id }}-main
+        cache-to: type=registry,ref=ghcr.io/${{ inputs.repository }}:buildcache-${{ matrix.cache_id }}-${{ steps.normalize_version.outputs.normalized_version }},mode=max
+        outputs: type=image,name=${{ env.REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=true
+    - name: Generate SBOM for pushed image
+      # Skip on pull_request: PR builds are unreviewed code. Attesting them
+      # would yield signed attestations that pass `gh attestation verify
+      # --repo teslamate-org/teslamate`, which consumers read as "official".
+      if: github.event_name != 'pull_request'
+      uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+      with:
+        image: ${{ env.REGISTRY_IMAGE }}@${{ steps.build.outputs.digest }}
+        format: spdx-json
+        output-file: /tmp/sbom-${{ matrix.cache_id }}.spdx.json
+        upload-artifact: false
+        upload-release-assets: false
+    - name: Attest build provenance
+      if: github.event_name != 'pull_request'
+      uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+      with:
+        # attest-* reads the registry from the first path segment of subject-name,
+        # so qualify Docker Hub short names with docker.io; leave ghcr.io as-is.
+        subject-name: >-
+          ${{ startsWith(env.REGISTRY_IMAGE, 'ghcr.io/')
+              && env.REGISTRY_IMAGE
+              || format('docker.io/{0}', env.REGISTRY_IMAGE) }}
+        subject-digest: ${{ steps.build.outputs.digest }}
+        push-to-registry: true
+    - name: Attest SBOM
+      if: github.event_name != 'pull_request'
+      uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+      with:
+        subject-name: >-
+          ${{ startsWith(env.REGISTRY_IMAGE, 'ghcr.io/')
+              && env.REGISTRY_IMAGE
+              || format('docker.io/{0}', env.REGISTRY_IMAGE) }}
+        subject-digest: ${{ steps.build.outputs.digest }}
+        predicate-type: "https://spdx.dev/Document"
+        predicate-path: /tmp/sbom-${{ matrix.cache_id }}.spdx.json
+        push-to-registry: true
+    - name: Export digest
+      shell: bash
+      run: |
+        mkdir -p /tmp/digests
+        digest="${{ steps.build.outputs.digest }}"
+        touch "/tmp/digests/${digest#sha256:}"
+        ls -l /tmp/digests/
+    - name: Upload digest
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: single-digest-${{ matrix.cache_id }}
+        path: /tmp/digests/*
+        if-no-files-found: error
+        retention-days: 1

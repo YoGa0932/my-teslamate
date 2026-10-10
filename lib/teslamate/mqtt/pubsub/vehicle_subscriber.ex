@@ -67,37 +67,36 @@ defmodule TeslaMate.Mqtt.PubSub.VehicleSubscriber do
       |> add_geofence(summary)
       |> add_active_route(summary)
 
-    publish_values(values, state)
-    {:noreply, %{state | last_values: values}}
-  end
-
-  defp publish_values(values, %State{last_values: values} = state) do
-    values
-    |> Map.take(@do_not_retain)
-    |> Enum.each(fn {key, value} ->
-      publish({key, value}, state)
-    end)
+    last_values = publish_values(values, state)
+    {:noreply, %{state | last_values: last_values}}
   end
 
   defp publish_values(values, state) do
+    last_values = state.last_values || %{}
+
     values
     |> Stream.reject(&match?({_key, :unknown}, &1))
     |> Stream.filter(fn {key, value} ->
       ((key in @publish_if_nil or value != nil) and
-         (state.last_values == nil or Map.get(state.last_values, key) != value)) or
+         (not Map.has_key?(last_values, key) or Map.get(last_values, key) != value)) or
         key in @do_not_retain
     end)
-    |> Task.async_stream(&publish(&1, state),
+    |> Task.async_stream(fn entry -> {entry, publish(entry, state)} end,
       max_concurrency: 10,
       on_timeout: :kill_task,
       ordered: false
     )
-    |> Enum.each(fn
-      {_, reason} when reason != :ok ->
-        Logger.warning("MQTT publishing failed: #{inspect(reason)}")
+    |> Enum.reduce(last_values, fn
+      {:ok, {{key, value}, :ok}}, acc ->
+        Map.put(acc, key, value)
 
-      _ok ->
-        nil
+      {:ok, {_entry, reason}}, acc ->
+        Logger.warning("MQTT publishing failed: #{inspect(reason)}")
+        acc
+
+      {:exit, reason}, acc ->
+        Logger.warning("MQTT publishing failed: #{inspect(reason)}")
+        acc
     end)
   end
 
@@ -106,12 +105,14 @@ defmodule TeslaMate.Mqtt.PubSub.VehicleSubscriber do
     ideal_battery_range_km est_battery_range_km rated_battery_range_km charge_energy_added
     speed outside_temp inside_temp is_climate_on is_preconditioning locked sentry_mode
     plugged_in scheduled_charging_start_time charge_limit_soc charger_power windows_open
+    driver_front_window_open driver_rear_window_open passenger_front_window_open passenger_rear_window_open
     doors_open driver_front_door_open driver_rear_door_open passenger_front_door_open passenger_rear_door_open
     odometer shift_state charge_port_door_open time_to_full_charge charger_phases
     charger_actual_current charger_voltage version update_available update_version is_user_present
     model trim_badging exterior_color wheel_type spoiler_type trunk_open frunk_open elevation power
     charge_current_request charge_current_request_max tpms_pressure_fl tpms_pressure_fr tpms_pressure_rl tpms_pressure_rr
     tpms_soft_warning_fl tpms_soft_warning_fr tpms_soft_warning_rl tpms_soft_warning_rr climate_keeper_mode center_display_state
+    service_mode sun_roof_state sun_roof_installed sun_roof_percent_open download_perc install_perc
   )a
 
   defp add_simple_values(map, %Summary{} = summary) do
