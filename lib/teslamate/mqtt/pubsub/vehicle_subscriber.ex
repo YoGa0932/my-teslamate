@@ -5,10 +5,30 @@ defmodule TeslaMate.Mqtt.PubSub.VehicleSubscriber do
   import Core.Dependency, only: [call: 3]
 
   alias TeslaMate.Mqtt.Publisher
+  alias TeslaMate.Mqtt.PubSub.HomeAssistant
   alias TeslaMate.Vehicles.Vehicle.Summary
   alias TeslaMate.Vehicles
 
-  defstruct [:car_id, :last_values, :deps, :namespace]
+  @discovery_retry_initial_delay :timer.seconds(5)
+  @discovery_retry_max_delay :timer.minutes(5)
+
+  defstruct [
+    :car_id,
+    :last_values,
+    :deps,
+    :namespace,
+    :discovery,
+    :discovery_base_url,
+    :discovery_prefix,
+    :migration_delay,
+    :discovery_device,
+    :discovery_pending_summary,
+    :discovery_pending_device,
+    :discovery_retry_delay,
+    :discovery_retry_timer,
+    :discovery_retry_token
+  ]
+
   alias __MODULE__, as: State
 
   def child_spec(arg) do
@@ -34,25 +54,68 @@ defmodule TeslaMate.Mqtt.PubSub.VehicleSubscriber do
         |> Enum.reject(&is_nil(&1))
         |> Enum.join("/")
 
-      call(publisher, :publish, [topic, "", [retain: true, qos: 1]])
+      case call(publisher, :publish, [topic, "", [retain: true, qos: 1]]) do
+        :ok ->
+          :ok
+
+        error ->
+          Logger.warning("MQTT retained cleanup failed for #{topic}: #{inspect(error)}")
+      end
     end)
   end
 
   @impl true
   def init(opts) do
     car_id = Keyword.fetch!(opts, :car_id)
-    namespace = Keyword.fetch!(opts, :namespace)
+    # :namespace is absent (not nil) when MQTT_NAMESPACE is unset, since
+    # Mqtt.init drops nil options before starting PubSub.
+    namespace = Keyword.get(opts, :namespace)
 
     deps = %{
       vehicles: Keyword.get(opts, :deps_vehicles, Vehicles),
       publisher: Keyword.get(opts, :deps_publisher, Publisher)
     }
 
-    :ok = call(deps.vehicles, :subscribe_to_summary, [car_id])
-    :ok = clear_retained(car_id, namespace, deps.publisher)
+    discovery = Keyword.get(opts, :discovery, false)
+    discovery_base_url = Keyword.get(opts, :discovery_base_url)
+    discovery_prefix = Keyword.get(opts, :discovery_prefix)
+    migration_delay = Keyword.get(opts, :migration_delay)
 
-    {:ok, %State{car_id: car_id, namespace: namespace, deps: deps}}
+    :ok = call(deps.vehicles, :subscribe_to_summary, [car_id])
+
+    {:ok,
+     %State{
+       car_id: car_id,
+       namespace: namespace,
+       deps: deps,
+       discovery: discovery,
+       discovery_base_url: discovery_base_url,
+       discovery_prefix: discovery_prefix,
+       migration_delay: migration_delay
+     }, {:continue, :clear_retained}}
   end
+
+  @impl true
+  def handle_continue(
+        :clear_retained,
+        %State{car_id: car_id, namespace: namespace, deps: deps} = state
+      ) do
+    clear_retained(car_id, namespace, deps.publisher)
+    clear_discovery(state)
+    {:noreply, state}
+  end
+
+  defp clear_discovery(%State{discovery: false, deps: deps} = state) do
+    case HomeAssistant.clear(state.car_id, discovery_opts(state), deps.publisher) do
+      :ok ->
+        :ok
+
+      {:error, reason} ->
+        Logger.warning("MQTT HA discovery cleanup failed: #{inspect(reason)}")
+    end
+  end
+
+  defp clear_discovery(%State{}), do: :ok
 
   @publish_if_nil ~w(charge_energy_added charger_actual_current charger_phases
                        charger_power charger_voltage scheduled_charging_start_time
@@ -63,12 +126,133 @@ defmodule TeslaMate.Mqtt.PubSub.VehicleSubscriber do
     values =
       %{}
       |> add_simple_values(summary)
+      |> add_software_update(state.last_values)
       |> add_car_latitude_longitude(summary)
       |> add_geofence(summary)
       |> add_active_route(summary)
 
     last_values = publish_values(values, state)
+
+    state = maybe_publish_discovery(summary, state)
+
     {:noreply, %{state | last_values: last_values}}
+  end
+
+  def handle_info(
+        {:retry_discovery, token},
+        %State{
+          discovery: true,
+          discovery_retry_token: token,
+          discovery_pending_summary: %Summary{} = summary,
+          discovery_pending_device: device
+        } = state
+      ) do
+    state = %{
+      state
+      | discovery_pending_summary: nil,
+        discovery_pending_device: nil,
+        discovery_retry_timer: nil,
+        discovery_retry_token: nil
+    }
+
+    {:noreply, publish_or_schedule_discovery(summary, device, state)}
+  end
+
+  def handle_info({:retry_discovery, _stale_token}, %State{} = state), do: {:noreply, state}
+
+  defp maybe_publish_discovery(%Summary{} = summary, %State{discovery: true} = state) do
+    opts = discovery_opts(state)
+    device = HomeAssistant.device(summary, opts)
+
+    cond do
+      device == state.discovery_device ->
+        reset_discovery_retry(state)
+
+      is_reference(state.discovery_retry_timer) ->
+        %{
+          state
+          | discovery_pending_summary: summary,
+            discovery_pending_device: device
+        }
+
+      true ->
+        publish_or_schedule_discovery(summary, device, state)
+    end
+  end
+
+  defp maybe_publish_discovery(%Summary{}, %State{} = state), do: state
+
+  defp publish_or_schedule_discovery(%Summary{} = summary, device, %State{} = state) do
+    case publish_discovery(summary, discovery_opts(state), state) do
+      :ok ->
+        state
+        |> reset_discovery_retry()
+        |> Map.put(:discovery_device, device)
+
+      {:error, reason} ->
+        schedule_discovery_retry(summary, device, reason, state)
+    end
+  end
+
+  defp publish_discovery(
+         %Summary{} = summary,
+         opts,
+         %State{discovery_device: nil, deps: deps}
+       ) do
+    HomeAssistant.migrate(summary, opts, deps.publisher)
+  end
+
+  defp publish_discovery(%Summary{} = summary, opts, %State{deps: deps}) do
+    HomeAssistant.publish(summary, opts, deps.publisher)
+  end
+
+  defp schedule_discovery_retry(%Summary{} = summary, device, reason, %State{} = state) do
+    delay = next_discovery_retry_delay(state.discovery_retry_delay)
+    token = make_ref()
+    timer = Process.send_after(self(), {:retry_discovery, token}, delay)
+
+    Logger.warning(
+      "MQTT HA discovery publishing failed: #{inspect(reason)}; retrying in #{div(delay, 1_000)}s"
+    )
+
+    %{
+      state
+      | discovery_pending_summary: summary,
+        discovery_pending_device: device,
+        discovery_retry_delay: delay,
+        discovery_retry_timer: timer,
+        discovery_retry_token: token
+    }
+  end
+
+  defp next_discovery_retry_delay(nil), do: @discovery_retry_initial_delay
+
+  defp next_discovery_retry_delay(delay) do
+    min(delay * 2, @discovery_retry_max_delay)
+  end
+
+  defp reset_discovery_retry(%State{discovery_retry_timer: timer} = state) do
+    if is_reference(timer), do: Process.cancel_timer(timer)
+
+    %{
+      state
+      | discovery_pending_summary: nil,
+        discovery_pending_device: nil,
+        discovery_retry_delay: nil,
+        discovery_retry_timer: nil,
+        discovery_retry_token: nil
+    }
+  end
+
+  defp discovery_opts(%State{} = state) do
+    [
+      car_id: state.car_id,
+      namespace: state.namespace,
+      base_url: state.discovery_base_url,
+      discovery_prefix: state.discovery_prefix,
+      migration_delay: state.migration_delay
+    ]
+    |> Enum.reject(fn {_k, v} -> is_nil(v) end)
   end
 
   defp publish_values(values, state) do
@@ -117,6 +301,27 @@ defmodule TeslaMate.Mqtt.PubSub.VehicleSubscriber do
 
   defp add_simple_values(map, %Summary{} = summary) do
     Map.merge(map, Map.take(summary, @simple_values))
+  end
+
+  defp add_software_update(map, last_values) do
+    values =
+      (last_values || %{})
+      |> Map.merge(Map.reject(map, fn {_key, value} -> value in [nil, :unknown] end))
+
+    with version when is_binary(version) <- values[:version],
+         update_available when is_boolean(update_available) <- values[:update_available],
+         latest_version when is_binary(latest_version) <-
+           if(update_available, do: values[:update_version], else: version) do
+      software_update =
+        Jason.encode!(%{
+          installed_version: version,
+          latest_version: latest_version
+        })
+
+      Map.put(map, :software_update, software_update)
+    else
+      _value -> map
+    end
   end
 
   defp add_car_latitude_longitude(map, %Summary{} = summary) do
