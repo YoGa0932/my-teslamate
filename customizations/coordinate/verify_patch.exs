@@ -45,6 +45,7 @@ defmodule TeslaMate.Repo do
 end
 
 {paths, _} = Code.eval_file(Path.join(__DIR__, "paths.exs"))
+Code.require_file("lib/teslamate/version.ex", paths.source_dir)
 Code.require_file("lib/teslamate/locations/geocoder.ex", paths.source_dir)
 
 {:defmodule, _, [_, [do: {:__block__, _, definitions}]]} =

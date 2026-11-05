@@ -28,6 +28,11 @@ updates:
     directory: "/rust"
     schedule:
       interval: "monthly"
+    groups:
+      opentelemetry-rust:
+        patterns:
+          - "opentelemetry*"
+          - "tracing-opentelemetry"
 
   - package-ecosystem: "docker"
     directory: "/"

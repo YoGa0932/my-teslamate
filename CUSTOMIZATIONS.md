@@ -1,6 +1,6 @@
 # my-teslamate-v3
 
-本分支以官方 TeslaMate v4.3.0 为基础，继承 `my-teslamate-v2` 的 Git 历史，只保留高德坐标能力和官方 Grafana 仪表盘的中文显示。
+本分支以官方 TeslaMate v4.4.0 为基础，继承 `my-teslamate-v2` 的 Git 历史，只保留高德坐标能力和官方 Grafana 仪表盘的中文显示。
 
 ## 坐标能力
 
@@ -28,12 +28,12 @@ python3 customizations/grafana-zh/verify.py
 elixir customizations/coordinate/verify_patch.exs
 ```
 
-Grafana 使用官方 `teslamate/grafana:4.3.0` 镜像，默认界面语言可设置为 `GF_USERS_DEFAULT_LANGUAGE=zh-Hans`。中文 JSON 按官方三个提供器分别挂载；部署复制步骤见 `customizations/grafana-zh/README.md`。
+Grafana 使用官方 `teslamate/grafana:4.4.0` 镜像，默认界面语言可设置为 `GF_USERS_DEFAULT_LANGUAGE=zh-Hans`。中文 JSON 按官方三个提供器分别挂载；部署复制步骤见 `customizations/grafana-zh/README.md`。
 
 TeslaMate 使用本分支原有的官方 Dockerfile 构建：
 
 ```sh
-docker build -t teslamate-custom:4.3.0-gcj02 .
+docker build -t teslamate-custom:4.4.0-gcj02 .
 ```
 
 其余部署服务继续按照该官方版本的 Docker Compose 说明配置 PostgreSQL、Grafana 与 Mosquitto，并沿用已有部署的持久数据卷及原加密密钥。
@@ -47,4 +47,4 @@ docker build -t teslamate-custom:4.3.0-gcj02 .
 5. 使用新版本官方 Dockerfile 构建应用，更新应用和官方 Grafana 镜像；数据库主版本变化需单独迁移和恢复验证。
 6. 切换前备份数据及机密配置，切换后确认 Tesla 登录、车辆采集、坐标转换、仪表盘和备份正常。
 
-运行配置、密钥、数据库和运行报告不保存在 Git 中。本次分支代码对应 2026-10-09 已验证的部署；服务器专属迁移材料独立保存。
+运行配置、密钥、数据库和运行报告不保存在 Git 中。服务器专属部署与验收记录独立保存。
